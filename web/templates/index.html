@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block body %}
+<h2>Lagen {{ season_label(season) }}</h2>
+{% if standings %}
+<div class="cards">
+  {% for r in standings %}
+  <a class="card" href="{{ B }}/team/{{ r['team_id'] }}{{ qargs() }}">
+    <div class="k">{{ r['team'] | team }}</div>
+    {% if r['matches'] %}
+      <div class="v">{{ r['pos'] }}<span class="s">/{{ r['teams_in_div'] }}</span></div>
+      <div class="s">{{ r['division'] }}</div>
+      <div class="s">{{ r['matches'] }} matcher &middot; {{ r['points'] | round(0) | int }} p
+        &middot; {{ r['win'] }}-{{ r['draw'] }}-{{ r['loss'] }}</div>
+    {% else %}
+      <div class="v mut">&ndash;</div>
+      <div class="s">{{ r['division'] }}</div>
+      <div class="s">{{ r['teams_in_div'] }} lag &middot; ej spelat</div>
+    {% endif %}
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="panel"><div class="note">Inga tabeller för {{ season_label(season) }} ännu.</div></div>
+{% endif %}
+
+<h2>Kommande matcher</h2>
+<div class="panel scroll">
+{% if upcoming %}
+<table><thead><tr><th>Datum</th><th class="num">Omgång</th><th>Lag</th><th>Motstånd</th><th>Hall</th><th>Division</th></tr></thead>
+<tbody>
+{% for m in upcoming %}
+  {% set home = 'Mamba' in m['home'] %}
+  <tr>
+    <td class="mut">{{ m['played_at'][:16].replace('T',' ') }}</td>
+    <td class="num mut">{{ m['round_id'] }}</td>
+    <td class="us">{{ (home and m['home'] or m['away']) | team }}</td>
+    <td>{{ (home and m['away'] or m['home']) | team }} <span class="pill">{{ home and 'hemma' or 'borta' }}</span></td>
+    <td class="mut">{{ m['hall'] }}</td>
+    <td class="mut">{{ m['division'] }}</td>
+  </tr>
+{% endfor %}
+</tbody></table>
+{% else %}<div class="note">Inga kommande matcher inlagda.</div>{% endif %}
+</div>
+
+<h2>Senaste resultat</h2>
+<div class="panel scroll">
+{% if recent %}
+<table><thead><tr><th>Datum</th><th class="num">Omgång</th><th>Lag</th><th>Motstånd</th><th class="num">Käglor</th><th class="num">Poäng</th><th>Hall</th></tr></thead>
+<tbody>
+{% for m in recent %}
+  {% set home = 'Mamba' in m['home'] %}
+  {% set us = home and m['home_pts'] or m['away_pts'] %}
+  {% set them = home and m['away_pts'] or m['home_pts'] %}
+  <tr>
+    <td class="mut">{{ m['played_at'][:10] }}</td>
+    <td class="num mut">{{ m['round_id'] }}</td>
+    <td class="us">{{ (home and m['home'] or m['away']) | team }}</td>
+    <td>{{ (home and m['away'] or m['home']) | team }}</td>
+    <td class="num mut">{{ home and m['home_score'] or m['away_score'] }}–{{ home and m['away_score'] or m['home_score'] }}</td>
+    <td class="num">
+        {{ us | round(0) | int }}–{{ them | round(0) | int }}</td>
+    <td class="mut">{{ m['hall'] }}</td>
+  </tr>
+{% endfor %}
+</tbody></table>
+{% else %}<div class="note">Inga spelade matcher.</div>{% endif %}
+</div>
+
+<h2>Träningar och träningsmatcher</h2>
+<div class="panel scroll">
+{% if sessions %}
+<table><thead><tr><th>Datum</th><th>Tillfälle</th><th>Typ</th>
+<th class="num">Spelare</th><th class="num">Serier</th></tr></thead>
+<tbody>
+{% for s in sessions %}
+<tr>
+  <td class="mut">{{ s['played_on'] }}</td>
+  <td><a href="{{ B }}/session/{{ s['id'] }}">{{ s['label'] }}</a></td>
+  <td><span class="pill">{{ s['kind'] }}</span></td>
+  <td class="num">{{ s['players'] }}</td>
+  <td class="num">{{ s['games'] }}</td>
+</tr>
+{% endfor %}
+</tbody></table>
+{% elif not practice %}
+<div class="note">Träningsmatcher är dolda. Slå på <em>Träning</em> uppe till höger
+för att visa dem och räkna med dem i statistiken.</div>
+{% else %}
+<div class="note">Inga träningstillfällen inlagda för säsongen.
+Lägg till med <code>python collector/fetch_social.py --booking NNNN --date YYYY-MM-DD</code>.</div>
+{% endif %}
+</div>
+
+<h2>Bowlit-insamling</h2>
+<div class="panel"><div class="note">
+{% if caps['n'] %}
+  {{ caps['n'] }} sparade poängtavlor från {{ caps['books'] }} bokningar.
+  Först {{ caps['first_ts'][:16].replace('T',' ') }}, senast {{ caps['last_ts'][:16].replace('T',' ') }} UTC.
+{% else %}
+  Inget insamlat ännu. Kör <code>python collector/capture.py</code> under match.
+{% endif %}
+</div></div>
+{% endblock %}

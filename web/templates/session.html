@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}{{ meta['label'] if meta else sid }}{% endblock %}
+
+{% macro side_table(s) %}
+<div class="panel scroll">
+<table><thead><tr>
+  <th>#</th><th>Spelare</th>
+  {% for g in range(1, n_games + 1) %}<th class="num">S{{ g }}</th>{% endfor %}
+  <th class="num">Totalt</th><th class="num">Snitt</th>
+  <th class="num">Strike</th><th class="num">Spärr</th>
+  <th class="num">Hål</th><th class="num">Spärr miss</th><th class="num">Enkel miss</th>
+</tr></thead>
+<tbody>
+{% for p in s['players'] %}
+  {% set st = p['st'] %}
+  <tr>
+    <td class="mut">{{ loop.index }}</td>
+    <td {% if p['club'] %}class="us"{% endif %}>{{ p['player'] }}</td>
+    {% for g in range(1, n_games + 1) %}
+      {% set gm = (p['games'] | selectattr('game', 'equalto', g) | list | first) %}
+      <td class="num {% if gm and gm['score'] and gm['score'] >= 200 %}w{% endif %}">
+        {{ gm['score'] if gm else '–' }}</td>
+    {% endfor %}
+    <td class="num">{{ p['pins'] }}</td>
+    <td class="num mut">{{ p['avg'] | round(1) }}</td>
+    <td class="num">{{ st['strikes'] }} <span class="mut">({{ pct(st['strikes'], st['frames']) | round(0) | int }}%)</span></td>
+    <td class="num">{{ st['spares'] }}<span class="mut">/{{ st['spare_chances'] }} ({{ pct(st['spares'], st['spare_chances']) | round(0) | int if st['spare_chances'] else 0 }}%)</span></td>
+    <td class="num">{{ st['split_first'] }}<span class="mut"> ({{ pct(st['split_first'], st['first_balls']) | round(1) if st['first_balls'] else 0 }}%)</span></td>
+    <td class="num">{{ st['spare_chances'] - st['spares'] }}<span class="mut"> ({{ pct(st['spare_chances'] - st['spares'], st['spare_chances']) | round(1) if st['spare_chances'] else 0 }}%)</span></td>
+    <td class="num">{{ st['single_pin'] - st['single_pin_made'] }}<span class="mut">/{{ st['single_pin'] }} ({{ pct(st['single_pin'] - st['single_pin_made'], st['single_pin']) | round(1) if st['single_pin'] else 0 }}%)</span></td>
+  </tr>
+{% endfor %}
+</tbody>
+<tfoot><tr>
+  <td></td><td class="mut">{{ s['players'] | length }} spelare</td>
+  {% for g in range(1, n_games + 1) %}<td></td>{% endfor %}
+  <td class="num">{{ s['pins'] }}</td>
+  <td class="num mut">{{ s['avg'] | round(1) }}</td>
+  <td class="num mut">{{ pct(s['st']['strikes'], s['st']['frames']) | round(0) | int }}%</td>
+  <td class="num mut">{{ s['st']['spares'] }}/{{ s['st']['spare_chances'] }}
+    ({{ pct(s['st']['spares'], s['st']['spare_chances']) | round(0) | int }}%)</td>
+  <td class="num mut">{{ s['st']['split_first'] }}
+    ({{ pct(s['st']['split_first'], s['st']['first_balls']) | round(1) }}%)</td>
+  <td class="num mut">{{ s['st']['spare_chances'] - s['st']['spares'] }}
+    ({{ pct(s['st']['spare_chances'] - s['st']['spares'], s['st']['spare_chances']) | round(1) }}%)</td>
+  <td class="num mut">{{ s['st']['single_pin'] - s['st']['single_pin_made'] }}/{{ s['st']['single_pin'] }}
+    ({{ pct(s['st']['single_pin'] - s['st']['single_pin_made'], s['st']['single_pin']) | round(1) }}%)</td>
+</tr></tfoot>
+</table>
+</div>
+{% endmacro %}
+
+{% block body %}
+<h2>{{ meta['label'] if meta else 'Bokning ' ~ sid }}
+  <span class="mut">&mdash; {{ meta['played_on'] if meta else '' }}
+  &middot; {{ total }} spelare</span></h2>
+
+<div class="cards">
+  {% for s in sides %}
+  <div class="card">
+    <div class="k">{{ s['name'] }}</div>
+    <div class="v">{{ s['pins'] }}</div>
+    <div class="s">{{ s['players'] | length }} spelare &middot; snitt {{ s['avg'] | round(1) }}
+      &middot; {{ pct(s['st']['strikes'], s['st']['frames']) | round(0) | int }}% strike</div>
+  </div>
+  {% endfor %}
+</div>
+
+{% for s in sides %}
+  <h2>{{ s['name'] }}</h2>
+  {{ side_table(s) }}
+{% endfor %}
+
+{% endblock %}

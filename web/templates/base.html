@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}LUMA{% endblock %}</title>
+<style>
+:root{
+  --bg:#0f1115; --panel:#171a21; --panel2:#1d212a; --line:#2a2f3a;
+  --ink:#e8eaf0; --muted:#9aa3b2; --accent:#e63946; --good:#4ade80; --warn:#fbbf24;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+     font:14px/1.5 "Segoe UI",system-ui,-apple-system,sans-serif}
+a{color:inherit;text-decoration:none}
+a:hover{text-decoration:underline}
+header{background:var(--panel);border-bottom:1px solid var(--line);
+       padding:14px 22px;display:flex;gap:22px;align-items:center;flex-wrap:wrap}
+header h1{font-size:16px;margin:0;letter-spacing:.5px}
+header h1 span{color:var(--accent)}
+nav{display:flex;gap:16px;flex:1}
+nav a{color:var(--muted);font-size:13px}
+nav a.on,nav a:hover{color:var(--ink);text-decoration:none}
+nav .navsep{width:1px;background:var(--line);align-self:stretch;margin:-2px 0}
+/* 200-klubben: the club's own page layout, in this site's palette. */
+.k200{width:fit-content;max-width:100%}
+.k200-h1{font-size:22px;font-weight:700;text-align:center;color:var(--ink);margin-bottom:6px}
+.k200-h2{font-size:16px;font-weight:700;text-align:center;color:var(--muted);margin-bottom:3px}
+.k200-upd{font-size:12px;text-align:center;color:var(--muted);margin-bottom:14px}
+.k200-lead{margin:0 0 10px;max-width:62ch}
+.k200-details{margin-bottom:14px}
+.k200-details summary{list-style:none;cursor:pointer}
+.k200-details summary::-webkit-details-marker{display:none}
+.showInfo{font-style:italic;background:var(--panel2);border:1px solid var(--line);
+          border-radius:5px;padding:2px 8px;font-size:13px;color:var(--muted)}
+.k200-details[open] .showInfo,.showInfo:hover{color:var(--ink)}
+.pageinfo{margin-top:12px;border:1px dotted var(--muted);border-radius:10px;
+          background:rgba(251,191,36,.06);padding:2px 16px;max-width:62ch}
+.pageinfo ul{margin:4px 0 12px;padding-left:22px}
+.hl{font-weight:900;color:coral}
+.k200-tools{display:flex;justify-content:flex-end;margin-bottom:7px}
+button.btn{font:inherit;font-size:12px;cursor:pointer}
+.btn.copied{color:var(--good);border-color:var(--good)}
+.btn.copied svg{fill:var(--good)}
+.table200{border-collapse:collapse;font-variant-numeric:tabular-nums;
+          background:var(--panel);border:1px solid var(--line);border-radius:9px;
+          overflow:hidden}
+.table200 th,.table200 td{text-align:right;padding:7px 12px;white-space:nowrap;
+                          border-bottom:1px solid var(--line)}
+.table200 .firstCol{text-align:left}
+.table200 thead th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;
+                   color:var(--muted);font-weight:600}
+.table200 tbody tr:nth-child(odd){background:var(--panel2)}
+.table200 tbody tr:hover{background:#232833}
+.table200 tbody tr:last-child td{border-bottom:0}
+select{background:var(--panel2);color:var(--ink);border:1px solid var(--line);
+       border-radius:5px;padding:5px 8px;font-size:13px}
+main{max-width:1180px;margin:0 auto;padding:22px}
+/* Slagstatistik carries thirteen columns; 1180 forces a scrollbar on a
+   normal desktop. The wider cap and the tighter cells are opt-in so the
+   narrow pages keep their comfortable measure. */
+main.wide{max-width:1440px}
+.tight th{padding:8px 9px;font-size:10px}
+.tight td{padding:7px 9px}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);
+   margin:26px 0 10px;font-weight:600}
+h2:first-child{margin-top:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
+   text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap;font-weight:600}
+td{padding:8px 12px;border-bottom:1px solid #21252e;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+tbody tr:hover{background:var(--panel2)}
+.num{text-align:right}
+.mut{color:var(--muted)}
+.us{font-weight:600}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:14px}
+.card .k{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.card .v{font-size:26px;font-weight:600;margin-top:4px;font-variant-numeric:tabular-nums}
+.card .s{font-size:12px;color:var(--muted);margin-top:2px}
+.pill{display:inline-block;padding:1px 7px;border-radius:20px;font-size:11px;
+      background:var(--panel2);border:1px solid var(--line);color:var(--muted)}
+.w{color:var(--good)}
+.note{color:var(--muted);font-size:12px;padding:14px}
+.toggle{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:20px;
+        border:1px solid var(--line);background:var(--panel2);color:var(--muted);font-size:12px}
+.toggle:hover{text-decoration:none;border-color:#3a4150}
+.toggle .dot{width:8px;height:8px;border-radius:50%;background:#4a5060;
+             box-shadow:none;transition:background .15s}
+.toggle.on{color:var(--ink);border-color:#3f4654}
+.toggle.on .dot{background:var(--good);box-shadow:0 0 7px rgba(74,222,128,.65)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:20px;overflow:hidden;
+     background:var(--panel2)}
+.seg a{padding:5px 13px;font-size:12px;color:var(--muted);border-left:1px solid var(--line);
+       line-height:1.5}
+.seg a:first-child{border-left:0}
+.seg a:hover{color:var(--ink);background:#232833;text-decoration:none}
+.seg a.on{color:var(--ink);background:#2c323f;font-weight:600}
+.hrow{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:26px 0 10px}
+.hrow:first-child{margin-top:0}
+.hrow h2{margin:0}
+.hrow .sp{flex:1}
+th.sortable{cursor:pointer;user-select:none}
+th.sortable:hover{color:var(--ink)}
+/* The marker is only ever on the column being sorted. It is rendered on every
+   sortable header but hidden, so switching columns cannot jog the table
+   widths sideways by a character.
+   The arrow points at where the big numbers are, not at the sort direction:
+   up means the highest value is at the top of the table. */
+th.sortable::after{content:"↑";margin-left:5px;visibility:hidden;font-size:11px}
+th.sortable.asc::after,th.sortable.desc::after{visibility:visible;color:var(--ink)}
+th.sortable.asc::after{content:"↓"}
+th.sortable.desc::after{content:"↑"}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:5px 12px;border-radius:20px;
+     border:1px solid var(--line);background:var(--panel2);color:var(--muted);font-size:12px}
+.btn:hover{color:var(--ink);border-color:#3a4150;text-decoration:none}
+.btn:hover svg{fill:#21a366}
+.btn svg{width:13px;height:13px;fill:#5b6478;transition:fill .15s}
+.bigstat{display:grid;grid-template-columns:auto auto 1fr;gap:0;align-items:stretch}
+.bigstat .lead{padding:16px 22px;border-right:1px solid var(--line)}
+.bigstat .big{font-size:42px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+.bigstat .lk{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.bigstat .lead .lk{margin-top:6px}
+.bigstat .lead .s{font-size:12px;color:var(--muted);margin-top:5px}
+.bigstat .side{padding:16px 22px;border-right:1px solid var(--line);
+               display:grid;grid-template-columns:1fr 1fr;gap:9px 26px;align-content:center}
+.bigstat .side b{display:block;font-size:17px;font-weight:600;
+                 font-variant-numeric:tabular-nums;margin-top:1px}
+.bigstat .chartwrap{padding:14px 18px;display:flex;flex-direction:column;
+                    justify-content:center;min-width:0}
+.spark{width:100%;height:76px;display:block}
+.axis{display:flex;justify-content:space-between;gap:14px;font-size:11px;
+      color:var(--muted);margin-top:7px}
+.axis span:nth-child(2){text-align:center;flex:1}
+@media (max-width:860px){
+  .bigstat{grid-template-columns:1fr}
+  .bigstat .lead,.bigstat .side{border-right:0;border-bottom:1px solid var(--line)}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1><span>LUMA</span></h1>
+  <nav>
+    <a href="{{ B }}/{{ qargs() }}">Översikt</a>
+    <a href="{{ B }}/players{{ qargs() }}">Spelare</a>
+    <a href="{{ B }}/shots{{ qargs() }}">Slag</a>
+    {% for tid, tname in teams.items() %}
+      <a href="{{ B }}/team/{{ tid }}{{ qargs() }}">{{ tname | team | replace(club_label + ' ', '') }}</a>
+    {% endfor %}
+    {# Not a team -- the rule keeps it from reading as a sixth one. #}
+    <span class="navsep"></span>
+    <a href="{{ B }}/200-klubben{{ qargs() }}">200-klubben</a>
+  </nav>
+  <a class="toggle {% if practice %}on{% endif %}"
+     href="{{ qargs(practice=not practice, last=last) }}"
+     title="Räkna med registrerade träningsmatcher i statistiken">
+    <span class="dot"></span>Träning
+  </a>
+  <select onchange="location.search='?season='+this.value+'{% if not practice %}&practice=0{% endif %}{% if last %}&last={{ last }}{% endif %}'">
+    {% for s in all_seasons %}
+      <option value="{{ s }}" {% if s == season %}selected{% endif %}>{{ season_label(s) }}</option>
+    {% endfor %}
+  </select>
+</header>
+<main class="{% block main_class %}{% endblock %}">{% block body %}{% endblock %}</main>
+<script>
+// Click-to-sort, for any table that opts in with class="sortable".
+// A header joins in by carrying data-col; every cell under it carries the raw
+// value in data-v, because parsing it back out of text like "12/30 (40%)" would
+// sort the wrong half of the cell. Stat columns open on the highest value,
+// data-type="text" opens A-O and data-asc opens lowest-first (the rank column,
+// where clicking means "put it back how it was"). Cells with no value sink to
+// the bottom in either direction, so a blank never outranks a real number.
+(function () {
+  Array.prototype.forEach.call(document.querySelectorAll("table.sortable"), wire);
+
+  function wire(table) {
+    var tbody = table.tBodies[0];
+    if (!tbody) return;
+    var heads = Array.prototype.slice.call(table.querySelectorAll("th[data-col]"));
+
+    heads.forEach(function (th) {
+      th.classList.add("sortable");
+      th.tabIndex = 0;
+      th.setAttribute("role", "button");
+      th.addEventListener("click", function () { sort(th); });
+      th.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); sort(th); }
+      });
+    });
+
+    function sort(th) {
+      var i = th.cellIndex;
+      var text = th.dataset.type === "text";
+      var lowFirst = text || th.hasAttribute("data-asc");
+      var desc = th.classList.contains("desc") ? false
+               : th.classList.contains("asc") ? true
+               : !lowFirst;
+      heads.forEach(function (h) { h.classList.remove("asc", "desc"); });
+      th.classList.add(desc ? "desc" : "asc");
+
+      var rows = Array.prototype.slice.call(tbody.rows);
+      rows.sort(function (a, b) {
+        var x = a.cells[i].dataset.v, y = b.cells[i].dataset.v;
+        var ex = !x && x !== "0", ey = !y && y !== "0";
+        if (ex || ey) return ex && ey ? 0 : (ex ? 1 : -1);
+        if (text) return desc ? y.localeCompare(x, "sv") : x.localeCompare(y, "sv");
+        return desc ? y - x : x - y;
+      });
+      rows.forEach(function (r) { tbody.appendChild(r); });
+    }
+  }
+})();
+</script>
+<script>
+// Copy a table as plain tab-separated text: header row plus whatever the table
+// currently shows, in its current sort order. Reads textContent, so the player
+// links come out as bare names -- the point is to paste into somewhere that
+// cannot cope with markup.
+(function () {
+  Array.prototype.forEach.call(document.querySelectorAll("[data-copy]"), function (btn) {
+    btn.addEventListener("click", function () {
+      var table = document.querySelector(btn.getAttribute("data-copy"));
+      if (!table) return;
+      var lines = [];
+      Array.prototype.forEach.call(table.rows, function (row) {
+        var cells = Array.prototype.map.call(row.cells, function (c) {
+          return (c.textContent || "").replace(/\s+/g, " ").trim();
+        });
+        lines.push(cells.join("\t"));
+      });
+      var text = lines.join("\n");
+      done(navigator.clipboard ? navigator.clipboard.writeText(text) : legacy(text));
+    });
+
+    function legacy(text) {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); } catch (e) { /* nothing else to try */ }
+      document.body.removeChild(ta);
+      return Promise.resolve();
+    }
+
+    function done(p) {
+      var label = btn.querySelector(".copylabel") || btn;
+      var was = label.textContent;
+      Promise.resolve(p).then(function () {
+        label.textContent = "Kopierat";
+        btn.classList.add("copied");
+      }, function () {
+        label.textContent = "Kunde inte kopiera";
+      }).then(function () {
+        setTimeout(function () {
+          label.textContent = was;
+          btn.classList.remove("copied");
+        }, 1600);
+      });
+    }
+  });
+})();
+</script>
+{% if live_reload %}
+<script>
+// Dev only: reload the page when any source file changes on disk.
+(function () {
+  var seen = null;
+  function connect() {
+    var es = new EventSource("{{ B }}/__reload");
+    es.onmessage = function (e) {
+      if (seen === null) { seen = e.data; return; }
+      if (e.data !== seen) { es.close(); location.reload(); }
+    };
+    es.onerror = function () { es.close(); setTimeout(connect, 1000); };
+  }
+  connect();
+})();
+</script>
+{% endif %}
+</body>
+</html>

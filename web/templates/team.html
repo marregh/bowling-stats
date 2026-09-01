@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}{{ name | team }}{% endblock %}
+{% block body %}
+<h2>{{ name | team }} &mdash; {{ season_label(season) }}</h2>
+
+{% if chart %}
+{# The Urval control sits inside this section rather than at the top of the
+   page, because it governs only these numbers -- the Trupp averages below
+   stay whole-season. #}
+<div class="hrow">
+  <h2>Lagsnitt</h2>
+  <span class="sp"></span>
+  {% if windows %}
+    <span class="mut" style="font-size:12px">Urval</span>
+    <span class="seg">
+      {% for w in windows %}
+        <a href="{{ B }}/team/{{ team_id }}{{ qargs(last=w) }}"
+           class="{% if last == w %}on{% endif %}">Senaste {{ w }}</a>
+      {% endfor %}
+      <a href="{{ B }}/team/{{ team_id }}{{ qargs(last='alla') }}"
+         class="{% if not last %}on{% endif %}">Alla {{ played }}</a>
+    </span>
+  {% endif %}
+  <a class="btn" href="{{ B }}/team/{{ team_id }}/urval.xlsx{{ qargs(last=last) }}"
+     title="Ladda ner urvalet som Excel-fil">
+    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9 0H2.5A1.5 1.5 0 0 0 1 1.5v13A1.5 1.5 0 0 0 2.5 16h11a1.5 1.5 0 0 0 1.5-1.5V6H9V0Zm1.5.4L14.6 4.5H10.5V.4ZM4.3 8h1.6l1.1 2 1.1-2h1.6L7.9 11l1.9 3H8.2L7 11.9 5.8 14H4.2l1.9-3L4.3 8Z"/></svg>
+    Excel
+  </a>
+</div>
+
+<div class="panel bigstat">
+  <div class="lead">
+    <div class="big {% if form['avg'] >= target %}w{% endif %}">{{ form['avg'] | round(1) }}</div>
+    <div class="lk">Lagsnitt</div>
+    {% set d = form['avg'] - form['season_avg'] %}
+    {% if last %}
+      <div class="s">{{ '+' if d >= 0 }}{{ d | round(1) }} mot säsongen
+        ({{ form['season_avg'] | round(1) }})</div>
+    {% else %}
+      <div class="s">hela säsongen</div>
+    {% endif %}
+  </div>
+  <div class="side">
+    <div><span class="lk">Matcher</span><b>{{ form['matches'] }}</b></div>
+    <div><span class="lk">Serier</span><b>{{ form['games'] }}</b></div>
+    <div><span class="lk">Käglor</span><b>{{ '{:,}'.format(form['pins']).replace(',', ' ') }}</b></div>
+    <div><span class="lk">{{ target }}+</span><b>{{ form['over_target'] }}
+      <span class="mut">({{ (100 * form['over_target'] / form['games']) | round(0) | int }}%)</span></b></div>
+  </div>
+  <div class="chartwrap">
+    {% set W = 6 * chart | length %}
+    <svg class="spark" viewBox="0 0 {{ W }} 100" preserveAspectRatio="none"
+         role="img" aria-label="Lagsnitt per match">
+      {# preserveAspectRatio="none" stretches the box to the panel width, so
+         everything here is a rect -- a stroked line or text would skew with it. #}
+      {% set base = 100 * (hi - form['avg']) / (hi - lo) %}
+      <rect x="0" y="{{ base | round(2) }}" width="{{ W }}" height="0.7"
+            fill="#3f4654"></rect>
+      {% for c in chart %}
+        {% set y = 100 * (hi - c['avg']) / (hi - lo) %}
+        <rect x="{{ loop.index0 * 6 + 1 }}" y="{{ y | round(2) }}"
+              width="4" height="{{ (100 - y) | round(2) }}" rx="0.7"
+              fill="{{ '#4ade80' if c['avg'] >= target else '#5b6478' }}"></rect>
+        <rect x="{{ loop.index0 * 6 }}" y="0" width="6" height="100" fill="transparent">
+          <title>{{ c['date'] }} {{ c['opponent'] | team }} ({{ 'hemma' if c['at_home'] else 'borta' }})
+&#10;{{ c['avg'] | round(1) }} snitt &middot; {{ c['pins'] }} käglor på {{ c['games'] }} serier</title>
+        </rect>
+      {% endfor %}
+    </svg>
+    <div class="axis">
+      <span>{{ chart[0]['date'] }}</span>
+      <span class="mut">bäst {{ best['avg'] | round(1) }} mot {{ best['opponent'] | team }}
+        &middot; sämst {{ worst['avg'] | round(1) }} mot {{ worst['opponent'] | team }}</span>
+      <span>{{ chart[-1]['date'] }}</span>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<h2>Tabell</h2>
+<div class="panel scroll">
+{% if table %}
+<table><thead><tr><th>#</th><th>Lag</th><th class="num">M</th><th class="num">V</th>
+<th class="num">O</th><th class="num">F</th><th class="num">Käglor</th><th class="num">Diff</th><th class="num">P</th></tr></thead>
+<tbody>
+{% for t in table %}
+<tr {% if t['team_id'] == team_id %}class="us"{% endif %}>
+  <td class="mut">{{ loop.index }}</td>
+  <td>{{ t['team'] | team }}</td>
+  <td class="num">{{ t['matches'] }}</td><td class="num">{{ t['win'] }}</td>
+  <td class="num">{{ t['draw'] }}</td><td class="num">{{ t['loss'] }}</td>
+  <td class="num mut">{{ t['home_pts'] }}–{{ t['away_pts'] }}</td>
+  <td class="num">{{ t['diff'] }}</td>
+  <td class="num">{{ t['points'] | round(0) | int }}</td>
+</tr>
+{% endfor %}
+</tbody></table>
+{% else %}<div class="note">Ingen tabell ännu.</div>{% endif %}
+</div>
+
+<h2>Trupp <span class="mut">(hela säsongen &middot; grönt = {{ target }}+)</span></h2>
+<div class="panel scroll">
+{% if roster %}
+<table><thead><tr><th>Spelare</th><th class="num">Serier</th><th class="num">Snitt</th>
+<th class="num">Bästa serie</th><th class="num">Bästa match</th></tr></thead>
+<tbody>
+{% for p in roster %}
+<tr>
+  <td><a href="{{ B }}/player/{{ p['lic'] }}{{ qargs() }}">{{ p['player'] }}</a></td>
+  <td class="num">{{ p['games'] }}</td>
+  <td class="num {% if p['pins'] / p['games'] >= target %}w{% endif %}">{{ (p['pins'] / p['games']) | round(1) }}</td>
+  <td class="num">{{ p['high_game'] }}</td>
+  <td class="num mut">{{ p['high_series'] }}</td>
+</tr>
+{% endfor %}
+</tbody></table>
+{% else %}<div class="note">Inga spelarresultat ännu.</div>{% endif %}
+</div>
+
+<h2>Matcher</h2>
+<div class="panel scroll">
+<table><thead><tr><th>Datum</th><th class="num">Omgång</th><th>Motstånd</th><th></th><th class="num">Käglor</th>
+<th class="num">Poäng</th><th>Hall</th><th>Oljeprofil</th></tr></thead>
+<tbody>
+{% for m in matches %}
+  {% set home = m['home_id'] == team_id %}
+  <tr>
+    <td class="mut">{{ m['played_at'][:16].replace('T',' ') }}</td>
+    <td class="num mut">{{ m['round_id'] }}</td>
+    <td>{{ (home and m['away'] or m['home']) | team }}</td>
+    <td><span class="pill">{{ home and 'H' or 'B' }}</span></td>
+    {% if m['has_been_played'] %}
+      {% set us = home and m['home_pts'] or m['away_pts'] %}
+      {% set them = home and m['away_pts'] or m['home_pts'] %}
+      <td class="num mut">{{ home and m['home_score'] or m['away_score'] }}–{{ home and m['away_score'] or m['home_score'] }}</td>
+      <td class="num">{{ us|round(0)|int }}–{{ them|round(0)|int }}</td>
+    {% else %}
+      <td class="num mut">–</td><td class="num mut">–</td>
+    {% endif %}
+    <td class="mut">{{ m['hall'] }}</td>
+    <td class="mut">{{ m['oil_pattern'] }}</td>
+  </tr>
+{% endfor %}
+</tbody></table>
+</div>
+{% endblock %}

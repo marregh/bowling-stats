@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}{{ name }}{% endblock %}
+{% block body %}
+<div class="hrow">
+  <h2>{{ name }} &mdash; {{ season_label(season) }}</h2>
+  <span class="sp"></span>
+  {% if windows %}
+    <span class="mut" style="font-size:12px">Urval</span>
+    <span class="seg">
+      {% for w in windows %}
+        <a href="{{ B }}/player/{{ lic }}{{ qargs(last=w) }}"
+           class="{% if last == w %}on{% endif %}"
+           title="Bara de {{ w }} senast spelade matcherna">Senaste {{ w }}</a>
+      {% endfor %}
+      <a href="{{ B }}/player/{{ lic }}{{ qargs(last='alla') }}"
+         class="{% if not last %}on{% endif %}"
+         title="Hela säsongen">Alla {{ played }}</a>
+    </span>
+  {% endif %}
+  <a class="btn" href="{{ B }}/player/{{ lic }}/urval.xlsx{{ qargs(last=last) }}"
+     title="Ladda ner urvalet som Excel-fil">
+    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9 0H2.5A1.5 1.5 0 0 0 1 1.5v13A1.5 1.5 0 0 0 2.5 16h11a1.5 1.5 0 0 0 1.5-1.5V6H9V0Zm1.5.4L14.6 4.5H10.5V.4ZM4.3 8h1.6l1.1 2 1.1-2h1.6L7.9 11l1.9 3H8.2L7 11.9 5.8 14H4.2l1.9-3L4.3 8Z"/></svg>
+    Excel
+  </a>
+</div>
+{% if last %}
+<p class="mut" style="font-size:12px;margin:-4px 0 12px">
+  Visar {{ last }} av {{ played }} matcher, från {{ since }} och framåt.
+  Samma tidsfönster gäller alla siffror på sidan.</p>
+{% endif %}
+<div class="cards">
+  <div class="card"><div class="k">Snitt</div><div class="v">{{ stats['avg'] | round(1) }}</div>
+    <div class="s">{{ stats['games'] }} serier</div></div>
+  <div class="card"><div class="k">Bästa serie</div><div class="v">{{ stats['high_game'] }}</div>
+    <div class="s">bästa match {{ stats['high_series'] }}</div></div>
+  <div class="card"><div class="k">200+</div><div class="v">{{ stats['over_200'] }}</div>
+    <div class="s">{{ (100 * stats['over_200'] / stats['games']) | round(0) | int }}% av serierna</div></div>
+  <div class="card"><div class="k">Under 180</div><div class="v">{{ stats['under_180'] }}</div>
+    <div class="s">{{ (100 * stats['under_180'] / stats['games']) | round(0) | int }}% av serierna</div></div>
+</div>
+
+{% if shots and shots.get('frames') %}
+{# per_match can exceed hist when practice sessions are counted in -- those are
+   not league matches, so the "x av y" coverage framing only holds the other way. #}
+<h2>Slagstatistik <span class="mut">({{ shot_games }} serier från
+  {% if per_match | length <= hist | length %}{{ per_match | length }} av {{ hist | length }} matcher
+  {%- else %}{{ per_match | length }} tillfällen{% endif %} med Bowlit-data)</span></h2>
+<div class="cards">
+  <div class="card"><div class="k">Strike%</div>
+    <div class="v">{{ pct(shots['strikes'], shots['frames']) | round(1) }}</div>
+    <div class="s">{{ shots['strikes'] }} strikes</div></div>
+  <div class="card"><div class="k">Spärr%</div>
+    <div class="v">{{ pct(shots['spares'], shots['spare_chances']) | round(1) }}</div>
+    <div class="s">{{ shots['spares'] }} av {{ shots['spare_chances'] }} lägen</div></div>
+  <div class="card"><div class="k">Snitt 1:a klot</div>
+    <div class="v">{{ (shots['first_ball_pins'] / shots['first_balls']) | round(2) }}</div>
+    <div class="s">{{ shots['first_balls'] }} första klot</div></div>
+  <div class="card"><div class="k">Hål</div>
+    <div class="v">{{ shots['split_first'] }}<span class="s">
+      ({{ pct(shots['split_first'], shots['first_balls']) | round(1) }}%)</span></div>
+    <div class="s">{{ shots['split_converted'] }} tagna
+      &middot; {{ shots['split_first'] - shots['split_converted'] }} kvar öppna</div></div>
+</div>
+
+<h2>Slag per match</h2>
+<div class="panel scroll">
+<table><thead><tr><th>Datum</th><th>Match</th><th class="num">Serier</th><th class="num">Käglor</th>
+<th class="num">Strike</th><th class="num">Spärr</th><th class="num">Hål</th><th class="num">Spärr miss</th><th class="num">Enkel miss</th></tr></thead>
+<tbody>
+{% for m in per_match %}
+  {% set st = m['st'] %}
+  <tr>
+    <td class="mut">{{ m['played_at'][:10] }}</td>
+    <td>{{ m['label'] | team }}{% if m['adhoc'] %} <span class="pill">träning</span>{% endif %}</td>
+    <td class="num mut">{{ m['games'] }}</td>
+    <td class="num">{{ m['pins'] }}</td>
+    <td class="num">{{ st['strikes'] }} <span class="mut">({{ pct(st['strikes'], st['frames']) | round(0) | int }}%)</span></td>
+    <td class="num">{{ st['spares'] }}<span class="mut">/{{ st['spare_chances'] }} ({{ pct(st['spares'], st['spare_chances']) | round(0) | int if st['spare_chances'] else 0 }}%)</span></td>
+    <td class="num">{{ st['split_first'] }}<span class="mut"> ({{ pct(st['split_first'], st['first_balls']) | round(1) if st['first_balls'] else 0 }}%)</span></td>
+    <td class="num">{{ st['spare_chances'] - st['spares'] }}<span class="mut"> ({{ pct(st['spare_chances'] - st['spares'], st['spare_chances']) | round(1) if st['spare_chances'] else 0 }}%)</span></td>
+    <td class="num">{{ st['single_pin'] - st['single_pin_made'] }}<span class="mut">/{{ st['single_pin'] }} ({{ pct(st['single_pin'] - st['single_pin_made'], st['single_pin']) | round(1) if st['single_pin'] else 0 }}%)</span></td>
+  </tr>
+{% endfor %}
+</tbody></table>
+</div>
+{% elif last %}
+<h2>Slagstatistik</h2>
+<div class="panel"><p class="note">Ingen Bowlit-data för de {{ last }} senaste matcherna.
+  Bowlit-hallar täcker bara en del av serien &mdash; välj ett större urval.</p></div>
+{% endif %}
+
+<h2>Matcher</h2>
+<div class="panel scroll">
+<table><thead><tr><th>Datum</th><th class="num">Omgång</th><th>Lag</th><th>Motstånd</th>
+<th class="num">S1</th><th class="num">S2</th><th class="num">S3</th><th class="num">S4</th>
+<th class="num">Totalt</th><th class="num">Snitt</th><th class="num">Bp</th><th>Hall</th></tr></thead>
+<tbody>
+{% for h in hist %}
+  {% set gs = [h['g1'], h['g2'], h['g3'], h['g4']] | select | list %}
+  <tr>
+    <td class="mut">{{ h['played_at'][:10] }}</td>
+    <td class="num mut">{{ h['round_id'] }}</td>
+    <td class="us">{{ h['own'] | team }}</td>
+    <td>{{ h['opponent'] | team }}</td>
+    {% for g in [h['g1'], h['g2'], h['g3'], h['g4']] %}
+      <td class="num {% if g and g >= 200 %}w{% endif %}">{{ g or '–' }}</td>
+    {% endfor %}
+    <td class="num">{{ h['series'] }}</td>
+    <td class="num mut">{{ gs and (gs | sum / gs | length) | round(1) or '–' }}</td>
+    <td class="num mut">{{ h['lane_point'] if h['lane_point'] is not none else '–' }}</td>
+    <td class="mut">{{ h['hall'] }}</td>
+  </tr>
+{% endfor %}
+</tbody></table>
+</div>
+{% endblock %}

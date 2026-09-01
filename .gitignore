@@ -1,0 +1,33 @@
+# The real database never goes public. It holds 400+ named people, licence
+# numbers that encode a birth date, a youth division, and raw scoresheet PNGs.
+# data/sample.db is the synthetic stand-in -- see tools/make_sample_db.py.
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.sqlite
+!data/sample.db
+
+# Service and collector output
+logs/
+*.log
+
+# Generated exports
+*.xlsx
+
+# Secrets: SWEBOWL_API_KEY and friends
+.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

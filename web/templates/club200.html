@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}200-klubben{% endblock %}
+{% block body %}
+{#- Laid out to match the club's own 200-klubben page (spinnare.eu), which
+    people already know: same headings, same intro, same expandable rules and
+    the same five columns in the same order. Only the palette follows this
+    site. -#}
+<div class="k200">
+  <div class="k200-h1">200-klubben {{ season_label(season) | replace('/', '/20') }}</div>
+  <div class="k200-h2">Placering i 200-klubben</div>
+  {% if updated %}
+    <div class="k200-upd" title="Datum för den senaste seriematchen som räknats in">
+      Senast uppdaterad {{ updated }}</div>
+  {% endif %}
+
+  <p class="k200-lead">Här presenteras LuMas 200-klubb! En intern tabell där man
+    skaffar sig poäng genom att på seriematch slå {{ mark }} eller mer i en serie.</p>
+
+  <details class="k200-details">
+    <summary><span class="showInfo">Regler för 200-klubben</span></summary>
+    <div class="pageinfo">
+      <p><i>Poäng räknas ut enligt följande:</i><br>
+        {{ mark }}-serien i sig ger 2 poäng<br>
+        Varje tiotal poäng över {{ mark }} ger 1 poäng<br>
+        Entalssiffran divideras med 10<br><br>
+        Undantaget är 300 som ger hela 30 poäng.</p>
+      <p><i>Exempel: 245</i><br>
+        &nbsp;&nbsp;&nbsp; <span class="hl">2</span>45 &ndash; tvåan ger 2 poäng<br>
+        &nbsp;&nbsp;&nbsp; 2<span class="hl">4</span>5 &ndash; fyran ger 4 poäng<br>
+        &nbsp;&nbsp;&nbsp; 24<span class="hl">5</span> &ndash; femman 0,5 poäng<br>
+        Totalt 6,5 poäng</p>
+      <p>Fler exempel:</p>
+      <ul>
+        <li>200 ger 2,0</li>
+        <li>201 ger 2,1</li>
+        <li>211 ger 3,1</li>
+        <li>223 ger 4,3</li>
+        <li>236 ger 5,6</li>
+      </ul>
+    </div>
+  </details>
+
+  {% if table %}
+  <div class="k200-tools">
+    <button type="button" class="btn" data-copy="#tab200"
+            title="Kopierar tabellen som text, utan länkar – klistra in var som helst">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 1H4a2 2 0 0 0-2 2v8h1.5V3A.5.5 0 0 1 4 2.5h6V1Zm2.5 2H6.5A1.5 1.5 0 0 0 5 4.5v9A1.5 1.5 0 0 0 6.5 15h6a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 12.5 3Zm0 10.5h-6a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h6a.5.5 0 0 1 .5.5v9a.5.5 0 0 1-.5.5Z"/></svg>
+      <span class="copylabel">Kopiera tabellen</span>
+    </button>
+  </div>
+  <table id="tab200" class="table200 sortable">
+    <thead><tr>
+      <th></th>
+      <th class="firstCol" data-col data-type="text">Spelare</th>
+      <th data-col>Poäng</th>
+      <th data-col>{{ mark }}-serier</th>
+      <th data-col>Spelade serier</th>
+      <th data-col title="Andel av spelarens serier som nådde {{ mark }}">Andel {{ mark }}+</th>
+      <th data-col>Snitt</th>
+    </tr></thead>
+    <tbody>
+    {% for p in table %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td class="firstCol" data-v="{{ p['player'] }}"><a
+            href="{{ B }}/player/{{ p['lic'] }}{{ qargs() }}">{{ p['player'] }}</a></td>
+        <td data-v="{{ p['points'] }}">{{ '%.1f' | format(p['points']) }}</td>
+        <td data-v="{{ p['n'] }}">{{ p['n'] }}</td>
+        <td data-v="{{ p['played'] }}">{{ p['played'] }}</td>
+        <td data-v="{{ p['rate'] }}">{{ '%.1f' | format(p['rate']) }}%</td>
+        <td data-v="{{ p['avg'] }}">{{ '%.2f' | format(p['avg']) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="panel"><p class="note">Ingen har nått {{ mark }} den här säsongen ännu.</p></div>
+  {% endif %}
+</div>
+{% endblock %}

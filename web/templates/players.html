@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Spelare{% endblock %}
+{% block body %}
+<div class="hrow">
+  <h2>Spelare {{ season_label(season) }} <span class="mut">(minst 4 serier)</span></h2>
+  <span class="sp"></span>
+  {% if windows %}
+    <span class="mut" style="font-size:12px">Urval</span>
+    <span class="seg">
+      {% for w in windows %}
+        <a href="{{ B }}/players{{ qargs(last=w) }}"
+           class="{% if last == w %}on{% endif %}"
+           title="Varje spelares {{ w }} senast spelade matcher">Senaste {{ w }}</a>
+      {% endfor %}
+      <a href="{{ B }}/players{{ qargs(last='alla') }}"
+         class="{% if not last %}on{% endif %}"
+         title="Hela säsongen">Alla</a>
+    </span>
+  {% endif %}
+  {% if rows %}
+  <a class="btn" href="{{ B }}/players/urval.xlsx{{ qargs(last=last) }}"
+     title="Ladda ner listan som Excel-fil">
+    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9 0H2.5A1.5 1.5 0 0 0 1 1.5v13A1.5 1.5 0 0 0 2.5 16h11a1.5 1.5 0 0 0 1.5-1.5V6H9V0Zm1.5.4L14.6 4.5H10.5V.4ZM4.3 8h1.6l1.1 2 1.1-2h1.6L7.9 11l1.9 3H8.2L7 11.9 5.8 14H4.2l1.9-3L4.3 8Z"/></svg>
+    Excel
+  </a>
+  {% endif %}
+</div>
+{% if last %}
+<p class="mut" style="font-size:12px;margin:-4px 0 12px">
+  Varje spelares {{ last }} senast spelade matcher &mdash; inte ett gemensamt
+  datumfönster, så två spelares urval kan täcka olika delar av säsongen.
+  Matcher utan spelade serier räknas inte.</p>
+{% endif %}
+<div class="panel scroll">
+{% if rows %}
+<table class="sortable"><thead><tr>
+<th data-col data-asc title="Klicka för ursprunglig ordning">#</th>
+<th data-col data-type="text">Spelare</th>
+<th class="num" data-col>Matcher</th><th class="num" data-col>Serier</th>
+<th class="num" data-col>Snitt</th><th class="num" data-col>Bästa serie</th>
+<th class="num" data-col>Bästa match</th></tr></thead>
+<tbody>
+{% for p in rows %}
+<tr>
+  <td class="mut" data-v="{{ loop.index }}">{{ loop.index }}</td>
+  <td data-v="{{ p['player'] }}"><a href="{{ B }}/player/{{ p['lic'] }}{{ qargs() }}">{{ p['player'] }}</a></td>
+  <td class="num mut" data-v="{{ p['mm'] }}" {% if last %}title="{{ p['first'] }} – {{ p['last'] }}"{% endif %}>{{ p['mm'] }}</td>
+  <td class="num" data-v="{{ p['games'] }}">{{ p['games'] }}</td>
+  <td class="num" data-v="{{ p['pins'] / p['games'] }}">{{ (p['pins'] / p['games']) | round(1) }}</td>
+  <td class="num" data-v="{{ p['high_game'] }}">{{ p['high_game'] }}</td>
+  <td class="num mut" data-v="{{ p['high_series'] }}">{{ p['high_series'] }}</td>
+</tr>
+{% endfor %}
+</tbody></table>
+{% else %}<div class="note">Inga spelarresultat för säsongen.</div>{% endif %}
+</div>
+{% endblock %}
