@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}{{ m['home'] | team }} – {{ m['away'] | team }}{% endblock %}
+
+{% macro side_table(s) %}
+<div class="panel scroll">
+<table><thead><tr>
+  <th>#</th><th>Spelare</th>
+  <th class="num">S1</th><th class="num">S2</th><th class="num">S3</th><th class="num">S4</th>
+  <th class="num">Totalt</th><th class="num">Snitt</th><th class="num">Bp</th>
+  {% if s['covered'] %}
+    <th class="num">Strike</th><th class="num">Spärr</th>
+    <th class="num">Hål</th><th class="num">Spärr miss</th><th class="num">Enkel miss</th>
+  {% else %}
+    <th class="num">Plats</th>
+  {% endif %}
+</tr></thead>
+<tbody>
+{% for p in s['players'] %}
+  <tr>
+    <td class="mut">{{ loop.index }}</td>
+    <td><a href="{{ B }}/player/{{ p['lic'] }}{{ qargs() }}">{{ p['player'] }}</a></td>
+    {% for g in p['games'] %}
+      <td class="num {% if g and g >= 200 %}w{% endif %}">{{ g or '–' }}</td>
+    {% endfor %}
+    <td class="num">{{ p['series'] }}</td>
+    <td class="num mut">{{ p['avg'] | round(1) if p['avg'] is not none else '–' }}</td>
+    <td class="num mut">{{ p['lane_point'] if p['lane_point'] is not none else '–' }}</td>
+    {% if s['covered'] %}
+      {% set st = p['st'] %}
+      {% if st %}
+        <td class="num">{{ st['strikes'] }} <span class="mut">({{ pct(st['strikes'], st['frames']) | round(0) | int }}%)</span></td>
+        <td class="num">{{ st['spares'] }}<span class="mut">/{{ st['spare_chances'] }} ({{ pct(st['spares'], st['spare_chances']) | round(0) | int if st['spare_chances'] else 0 }}%)</span></td>
+        <td class="num">{{ st['split_first'] }}<span class="mut"> ({{ pct(st['split_first'], st['first_balls']) | round(1) if st['first_balls'] else 0 }}%)</span></td>
+        <td class="num">{{ st['spare_chances'] - st['spares'] }}<span class="mut"> ({{ pct(st['spare_chances'] - st['spares'], st['spare_chances']) | round(1) if st['spare_chances'] else 0 }}%)</span></td>
+        <td class="num">{{ st['single_pin'] - st['single_pin_made'] }}<span class="mut">/{{ st['single_pin'] }}</span></td>
+      {% else %}
+        {# bowled the match, but Bowlit never carried this player's card #}
+        <td class="num mut">–</td><td class="num mut">–</td><td class="num mut">–</td>
+        <td class="num mut">–</td><td class="num mut">–</td>
+      {% endif %}
+    {% else %}
+      <td class="num mut">{{ p['place'] or '–' }}</td>
+    {% endif %}
+  </tr>
+{% endfor %}
+</tbody>
+{% if s['covered'] and s['st'] %}
+<tfoot><tr>
+  <td></td><td class="mut">{{ s['covered'] }} av {{ s['players'] | length }} med slagdata</td>
+  <td></td><td></td><td></td><td></td>
+  <td class="num">{{ s['score'] }}</td><td></td><td></td>
+  <td class="num mut">{{ pct(s['st']['strikes'], s['st']['frames']) | round(0) | int }}%</td>
+  <td class="num mut">{{ s['st']['spares'] }}/{{ s['st']['spare_chances'] }}
+    ({{ pct(s['st']['spares'], s['st']['spare_chances']) | round(0) | int }}%)</td>
+  <td class="num mut">{{ s['st']['split_first'] }}
+    ({{ pct(s['st']['split_first'], s['st']['first_balls']) | round(1) }}%)</td>
+  <td class="num mut">{{ s['st']['spare_chances'] - s['st']['spares'] }}</td>
+  <td class="num mut">{{ s['st']['single_pin'] - s['st']['single_pin_made'] }}/{{ s['st']['single_pin'] }}</td>
+</tr></tfoot>
+{% endif %}
+</table>
+</div>
+{% endmacro %}
+
+{% block body %}
+<h2>{{ m['home'] | team }} – {{ m['away'] | team }}
+  <span class="mut">&mdash; {{ m['played_at'][:16].replace('T',' ') }}</span></h2>
+
+<div class="showInfo">
+  {{ m['division'] }} &middot; omgång {{ m['round_id'] }} &middot; {{ m['hall'] }}{% if m['city'] %}, {{ m['city'] }}{% endif %}
+  {%- if m['oil_pattern'] %} &middot; {{ m['oil_pattern'] }}{% endif %}
+</div>
+
+<div class="cards">
+  {% for s in sides %}
+  <div class="card">
+    <div class="k">{{ s['name'] | team }}</div>
+    <div class="v">{{ s['points'] | round(0) | int if s['points'] is not none else '–' }}</div>
+    <div class="s">{{ s['score'] }} käglor
+      {%- if s['covered'] %} &middot; {{ pct(s['st']['strikes'], s['st']['frames']) | round(0) | int }}% strike{% endif %}</div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if not has_frames %}
+<div class="panel"><div class="note">Ingen slagdata för den här matchen &mdash;
+  Bowlit täcker bara en del av hallarna. Nedan är BITS egna siffror.</div></div>
+{% endif %}
+
+{% for s in sides %}
+  <h2>{{ s['name'] | team }}</h2>
+  {{ side_table(s) }}
+{% endfor %}
+{% endblock %}

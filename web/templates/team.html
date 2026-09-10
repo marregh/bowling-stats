@@ -124,7 +124,8 @@
 <tbody>
 {% for m in matches %}
   {% set home = m['home_id'] == team_id %}
-  <tr>
+  <tr {% if m['has_been_played'] %}data-href="{{ B }}/match/{{ m['match_id'] }}{{ qargs() }}"
+          tabindex="0" title="Visa matchdetaljer"{% endif %}>
     <td class="mut">{{ m['played_at'][:16].replace('T',' ') }}</td>
     <td class="num mut">{{ m['round_id'] }}</td>
     <td>{{ (home and m['away'] or m['home']) | team }}</td>

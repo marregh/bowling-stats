@@ -20,7 +20,12 @@ def main():
     a = ap.parse_args()
 
     dashboard.app.config["LIVE_RELOAD"] = False      # no dev reload stream in prod
-    dashboard.app.config["TEMPLATES_AUTO_RELOAD"] = False
+    # Templates are re-read per request, so an edit to anything under
+    # templates/ is live without restarting the service. Costs one stat call
+    # per render. Python changes still need a restart -- waitress has no
+    # reloader and the modules are already in memory.
+    dashboard.app.config["TEMPLATES_AUTO_RELOAD"] = True
+    dashboard.app.jinja_env.auto_reload = True
     prefix = os.environ.get("LUMA_URL_PREFIX", "")
     print(f" * serving on http://{a.host}:{a.port}  prefix={prefix or '(root)'}", flush=True)
     serve(dashboard.app, host=a.host, port=a.port, threads=a.threads,

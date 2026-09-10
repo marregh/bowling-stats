@@ -59,9 +59,17 @@
   {% for s in sides %}
   <div class="card">
     <div class="k">{{ s['name'] }}</div>
-    <div class="v">{{ s['pins'] }}</div>
-    <div class="s">{{ s['players'] | length }} spelare &middot; snitt {{ s['avg'] | round(1) }}
-      &middot; {{ pct(s['st']['strikes'], s['st']['frames']) | round(0) | int }}% strike</div>
+    {% if s['points'] is not none %}
+      {# the match score proper: 4 pairs plus total pinfall, 5 a game #}
+      <div class="v">{{ '%g' % s['points'] }}</div>
+      <div class="s">{{ s['pins'] }} käglor &middot; {{ s['players'] | length }} spelare
+        &middot; snitt {{ s['avg'] | round(1) }}
+        &middot; {{ pct(s['st']['strikes'], s['st']['frames']) | round(0) | int }}% strike</div>
+    {% else %}
+      <div class="v">{{ s['pins'] }}</div>
+      <div class="s">{{ s['players'] | length }} spelare &middot; snitt {{ s['avg'] | round(1) }}
+        &middot; {{ pct(s['st']['strikes'], s['st']['frames']) | round(0) | int }}% strike</div>
+    {% endif %}
   </div>
   {% endfor %}
 </div>

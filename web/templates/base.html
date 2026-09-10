@@ -72,6 +72,8 @@ th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute
 td{padding:8px 12px;border-bottom:1px solid #21252e;white-space:nowrap}
 tr:last-child td{border-bottom:0}
 tbody tr:hover{background:var(--panel2)}
+tr[data-href]{cursor:pointer}
+tr[data-href]:focus-visible{outline:2px solid var(--warn);outline-offset:-2px}
 .num{text-align:right}
 .mut{color:var(--muted)}
 .us{font-weight:600}
@@ -264,6 +266,41 @@ th.sortable.desc::after{content:"↑"}
         }, 1600);
       });
     }
+  });
+})();
+</script>
+<script>
+// Whole-row links. A row opts in with data-href; anything genuinely clickable
+// inside it still wins, and a click that ended a text selection is ignored so
+// selecting a score does not navigate away.
+(function () {
+  function rowFor(el) { return el && el.closest ? el.closest("tr[data-href]") : null; }
+  function inner(el) { return el && el.closest ? el.closest("a,button,input,label,summary") : null; }
+
+  document.addEventListener("click", function (e) {
+    var tr = rowFor(e.target);
+    if (!tr || inner(e.target)) return;
+    if (window.getSelection && String(window.getSelection())) return;
+    var href = tr.getAttribute("data-href");
+    if (e.ctrlKey || e.metaKey || e.shiftKey) window.open(href, "_blank");
+    else location.href = href;
+  });
+
+  // Middle-click arrives as auxclick, not click.
+  document.addEventListener("auxclick", function (e) {
+    if (e.button !== 1) return;
+    var tr = rowFor(e.target);
+    if (!tr || inner(e.target)) return;
+    e.preventDefault();
+    window.open(tr.getAttribute("data-href"), "_blank");
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    var tr = rowFor(e.target);
+    if (!tr || e.target !== tr) return;
+    e.preventDefault();
+    location.href = tr.getAttribute("data-href");
   });
 })();
 </script>

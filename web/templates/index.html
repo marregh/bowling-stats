@@ -52,7 +52,9 @@
   {% set home = 'Mamba' in m['home'] %}
   {% set us = home and m['home_pts'] or m['away_pts'] %}
   {% set them = home and m['away_pts'] or m['home_pts'] %}
-  <tr>
+  {# every row here is has_been_played = 1 by the query, so all of them link #}
+  <tr data-href="{{ B }}/match/{{ m['match_id'] }}{{ qargs() }}"
+      tabindex="0" title="Visa matchdetaljer">
     <td class="mut">{{ m['played_at'][:10] }}</td>
     <td class="num mut">{{ m['round_id'] }}</td>
     <td class="us">{{ (home and m['home'] or m['away']) | team }}</td>

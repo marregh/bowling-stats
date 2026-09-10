@@ -566,6 +566,92 @@ def players_data():
                 played_max=played_max)
 
 
+def match_frame_map(con, bits_names, social_names):
+    """Map one match's Bowlit scoreboard names onto its BITS player names.
+
+    A token-subset match is safe here in a way the club-wide roster_map is not:
+    the candidate pool is only the people who bowled this match, so "Nilsson,
+    Andre" resolving to "Andre Nilsson" cannot collide with someone else's
+    roster entry. player_alias still wins where it has an opinion.
+    """
+    alias = {r["social_name"]: r["display"] for r
+             in con.execute("SELECT * FROM player_alias WHERE is_club = 1")}
+    keyed = {}
+    for p in bits_names:
+        keyed.setdefault(frozenset(name_key(p).split()), p)
+
+    out = {}
+    for sname in social_names:
+        toks = frozenset(name_key(alias.get(sname, sname)).split())
+        if not toks:
+            continue
+        if toks in keyed:
+            out[sname] = keyed[toks]
+            continue
+        hits = {v for k, v in keyed.items() if toks <= k or k <= toks}
+        if len(hits) == 1:
+            out[sname] = hits.pop()
+    return out
+
+
+def match_data(match_id):
+    """One played league match: the BITS scoresheet, plus Bowlit frame stats
+    for the players we can line up, when the hall was covered at all."""
+    con = connect()
+    m = con.execute("SELECT * FROM bits_match WHERE match_id = ?", (match_id,)).fetchone()
+    if not m or not m["has_been_played"]:
+        abort(404)
+
+    results = con.execute("""SELECT * FROM bits_result WHERE match_id = ?
+                             ORDER BY side, COALESCE(series, 0) DESC""", (match_id,)).fetchall()
+    social = con.execute("""SELECT player, game, game_score, balls
+                            FROM social_game WHERE match_id = ?""", (match_id,)).fetchall()
+
+    shots = {}
+    if social:
+        names = match_frame_map(con, [r["player"] for r in results],
+                                {r["player"] for r in social})
+        for r in social:
+            who = names.get(r["player"])
+            if not who:
+                continue
+            st = shots.setdefault(who, {"st": {}, "games": 0})
+            st["st"] = frames.add(st["st"], frames.stats(json.loads(r["balls"])))
+            st["games"] += 1
+
+    def build(side_code, name, score, pts):
+        players = []
+        for r in results:
+            if r["side"] != side_code:
+                continue
+            gs = [g for g in (r["g1"], r["g2"], r["g3"], r["g4"]) if g]
+            players.append({
+                "player": r["player"], "lic": r["lic"],
+                "games": [r["g1"], r["g2"], r["g3"], r["g4"]],
+                "series": r["series"], "place": r["place"],
+                "lane_point": r["lane_point"],
+                "avg": (sum(gs) / len(gs)) if gs else None,
+                "st": shots.get(r["player"], {}).get("st"),
+            })
+        agg = {}
+        for p in players:
+            if p["st"]:
+                agg = frames.add(agg, p["st"])
+        return {"name": name, "players": players, "score": score, "points": pts,
+                "st": agg or None,
+                "covered": sum(1 for p in players if p["st"])}
+
+    sides = [build("H", m["home"], m["home_score"], m["home_pts"]),
+             build("A", m["away"], m["away_score"], m["away_pts"])]
+    return {"m": m, "sides": sides, "season": m["season"],
+            "has_frames": any(s["covered"] for s in sides)}
+
+
+@app.route("/match/<int:match_id>")
+def match(match_id):
+    return render_template("match.html", pct=pct, **match_data(match_id))
+
+
 @app.route("/players")
 def players():
     return render_template("players.html", **players_data())
@@ -649,6 +735,39 @@ def split_label(label):
     return (text or CLUB_LABEL), "Motståndare"
 
 
+def match_points(rows):
+    """Match score for a 2v2 session: 20 points across four games.
+
+    Each lane pair is a two-against-two. The higher combined pinfall on the
+    pair takes 1 point, and the higher team pinfall over the whole game takes
+    1 more -- 4 pairs plus the total is 5 a game, 20 a match. A tie splits the
+    point, which is why these are floats rather than ints.
+
+    Home is the odd lane of each pair, the same convention the side split uses.
+    """
+    by_game = {}
+    for r in rows:
+        if r["lane"] is None:
+            continue
+        lanes = by_game.setdefault(r["game"], {})
+        lanes[r["lane"]] = lanes.get(r["lane"], 0) + (r["game_score"] or 0)
+
+    def award(h, a):
+        return (1.0, 0.0) if h > a else (0.0, 1.0) if a > h else (0.5, 0.5)
+
+    home = away = 0.0
+    for lanes in by_game.values():
+        for lane in sorted(l for l in lanes if l % 2 == 1):
+            if lane + 1 not in lanes:
+                continue                      # half a pair bowled: no point
+            h, a = award(lanes[lane], lanes[lane + 1])
+            home += h; away += a
+        h, a = award(sum(v for l, v in lanes.items() if l % 2 == 1),
+                     sum(v for l, v in lanes.items() if l % 2 == 0))
+        home += h; away += a
+    return home, away
+
+
 @app.route("/session/<int:sid>")
 def session(sid):
     """Everything bowled in one session -- every player, no roster filter and no
@@ -656,7 +775,7 @@ def session(sid):
     one-for-one; the leaderboards are the place for thresholds, not here."""
     con = connect()
     meta = con.execute("SELECT * FROM social_session WHERE id = ?", (sid,)).fetchone()
-    rows = con.execute("""SELECT player, game, game_score, cum_total, balls
+    rows = con.execute("""SELECT player, game, game_score, cum_total, balls, lane
                           FROM social_game WHERE match_id = ?
                           ORDER BY player, game""", (sid,)).fetchall()
     if not rows:
@@ -670,8 +789,10 @@ def session(sid):
             p = players[r["player"]] = {
                 "player": rmap.get(r["player"], r["player"]),
                 "scoreboard": r["player"], "games": [], "pins": 0, "st": {},
-                "club": r["player"] in rmap}
+                "club": r["player"] in rmap, "lanes": set()}
             order.append(r["player"])
+        if r["lane"] is not None:
+            p["lanes"].add(r["lane"])
         p["games"].append({"game": r["game"], "score": r["game_score"],
                            "cum": r["cum_total"]})
         p["pins"] += r["game_score"] or 0
@@ -688,11 +809,30 @@ def session(sid):
         pins = sum(m["pins"] for m in members)
         gs = sum(len(m["games"]) for m in members)
         return {"name": name, "players": members, "pins": pins, "games": gs,
-                "avg": pins / gs if gs else 0, "st": st}
+                "avg": pins / gs if gs else 0, "st": st, "points": None}
 
     home_name, away_name = split_label(meta["label"] if meta else "")
-    sides = [side([p for p in ranked if p["club"]], home_name),
-             side([p for p in ranked if not p["club"]], away_name)]
+
+    # Bowlit seats the two teams on opposite lanes of each pair -- home on the
+    # odd lane, visitors on the even -- and nobody crosses parity all session.
+    # That is the only thing on the scorecard that can separate two of OUR own
+    # teams from each other: the club/not-club split below cannot, because in
+    # an internal practice both sides are ours and everyone lands on one side.
+    for p in ranked:
+        pars = {lane % 2 for lane in p["lanes"]}
+        p["parity"] = pars.pop() if len(pars) == 1 else None
+    odd = [p for p in ranked if p["parity"] == 1]
+    even = [p for p in ranked if p["parity"] == 0]
+    if odd and even and len(odd) + len(even) == len(ranked):
+        sides = [side(odd, home_name), side(even, away_name)]
+        # only meaningful once the lanes have told us who is on which side
+        for s, pts in zip(sides, match_points(rows)):
+            s["points"] = pts
+    else:
+        # no usable lane split (one pair only, or someone changed lanes):
+        # fall back to ours-versus-theirs, which is right for away fixtures
+        sides = [side([p for p in ranked if p["club"]], home_name),
+                 side([p for p in ranked if not p["club"]], away_name)]
     sides = [s for s in sides if s["players"]]
     return render_template("session.html", season=season_arg(), meta=meta, sid=sid,
                            sides=sides, total=len(ranked), n_games=n_games, pct=pct)
