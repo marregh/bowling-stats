@@ -1,22 +1,27 @@
-"""Client for the Swebowl BITS API.
+"""Client for the Swebowl BITS data, through bits.swebowl.se's own connector.
 
-The API only answers once the caller has loaded the BITS site itself: hitting
-bits.swebowl.se establishes the session the API checks, and api.swebowl.se hands
-out its own ARRAffinity cookie. Skip either and every call returns an
-*empty-bodied* 401. The session also lapses if left idle, so a 401 is treated as
-"re-warm and retry" rather than a hard failure.
+Not api.swebowl.se. That host used to answer anyone holding Swebowl's public
+web-client key, after a session warm-up; since 2026-09-10 it answers that key
+with a bare IIS *403*, while a made-up key still gets the ordinary empty-bodied
+401 -- so the key is recognised and refused, not missing. Nothing about the
+request shape fixes it: headers, Origin/Referer, HTTP/2, query vs header all
+give the same 403.
+
+What changed is that bits.swebowl.se now reaches its own API through a
+same-origin connector, /MiscFrontApiConnector/..., which holds the key server
+side. That is what the site's own pages call, and it needs no key from us at
+all -- so there is no longer anything to put in the environment.
+
+Endpoint names come from the inline JS on the seriespel and match-detail pages.
 """
+import json
 import os
 import time
-import requests
+import urllib.error
+import urllib.parse
+import urllib.request
 
-BASE = "https://api.swebowl.se/api/v1"
-
-# Swebowl's own web client ships this key in the clear, but it is theirs, not
-# ours, so it is not committed here. Read it off any request bits.swebowl.se
-# makes to api.swebowl.se (it rides in the query string as APIKey) and put it
-# in the environment before running a collector.
-API_KEY = os.environ.get("SWEBOWL_API_KEY", "")
+BASE = "https://bits.swebowl.se/MiscFrontApiConnector"
 CLUB_ID = int(os.environ.get("BITS_CLUB_ID", "33651"))
 
 # Insertion order is the order the site's nav tabs appear in, so keep them in
@@ -29,42 +34,35 @@ TEAMS = {
     162098: "Lunds BK Mamba U",
 }
 
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+    "Accept": "application/json, text/javascript, */*; q=0.01",
+    "Referer": "https://bits.swebowl.se/seriespel",
+}
+
 
 class Bits:
-    def __init__(self):
-        self.s = requests.Session()
-        self.s.headers.update({
-            "Referer": "https://bits.swebowl.se/",
-            "Origin": "https://bits.swebowl.se",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-            "Accept": "application/json, text/javascript, */*; q=0.01",
-        })
-        self._warm = False
-
-    def _warmup(self):
-        self.s.get("https://bits.swebowl.se/", timeout=30)
-        self.s.get(BASE + "/", timeout=30)
-        self._warm = True
+    """Same interface as before; only the transport underneath has changed."""
 
     def get(self, path, **params):
-        if not API_KEY:
-            raise RuntimeError(
-                "SWEBOWL_API_KEY is not set. The BITS API needs Swebowl's "
-                "public web-client key: open bits.swebowl.se, watch a "
-                "request to api.swebowl.se, and copy the APIKey query "
-                "parameter.")
-        if not self._warm:
-            self._warmup()
-        params["APIKey"] = API_KEY
+        url = f"{BASE}/{path}?" + urllib.parse.urlencode(params)
+        req = urllib.request.Request(url, headers=HEADERS)
+        last = None
         for attempt in range(3):
-            r = self.s.get(f"{BASE}/{path}", params=params, timeout=45)
-            if r.status_code == 401:
-                time.sleep(1 + attempt)
-                self._warmup()
-                continue
-            r.raise_for_status()
-            return r.json() if r.content else None
-        raise RuntimeError(f"BITS refused {path} after re-warming the session")
+            try:
+                with urllib.request.urlopen(req, timeout=60) as r:
+                    body = r.read()
+                    return json.loads(body.decode("utf-8")) if body else None
+            except urllib.error.HTTPError as e:
+                # 5xx and 429 are worth another go; a 404 is a wrong endpoint
+                # name and will not improve by asking again.
+                if e.code not in (429, 500, 502, 503, 504):
+                    raise
+                last = e
+            except urllib.error.URLError as e:
+                last = e
+            time.sleep(1 + attempt)
+        raise RuntimeError(f"BITS-connectorn svarade inte på {path}: {last}")
 
     # --- the handful of calls we actually need -------------------------------
     def seasons(self):
@@ -74,11 +72,11 @@ class Bits:
         return self.get("Team", clubId=club, seasonId=season)
 
     def matches(self, season, club=CLUB_ID):
-        return self.get("Match", seasonId=season, clubId=club)
+        return self.get("ListMatches", seasonId=season, clubId=club)
 
     def standing(self, season, division):
-        return self.get("Standing", seasonId=season, divisionId=division)
+        return self.get("GetStandings", seasonId=season, divisionId=division)
 
     def match_results(self, match_id, scheme_id):
-        return self.get("matchResult/GetMatchResults",
+        return self.get("GetMatchResults",
                         matchId=match_id, matchSchemeId=scheme_id)

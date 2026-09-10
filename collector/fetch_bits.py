@@ -1,24 +1,37 @@
 """Mirror the club's BITS data into SQLite. Safe to re-run; upserts throughout."""
 import argparse, sys
+from datetime import datetime, timezone
 
 from bits import Bits, TEAMS
 from store import connect
 
 
 def sync_season(con, api, season, verbose=True):
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     matches = api.matches(season) or []
     divisions = set()
     for m in matches:
         divisions.add(m["matchDivisionId"])
+        # Columns named rather than positional: bits_match has grown a column
+        # since, and a bare VALUES list silently shifts everything along.
         con.execute("""
-            INSERT INTO bits_match VALUES
+            INSERT INTO bits_match
+              (match_id, season, division_id, division, league, round_id,
+               played_at, home_id, home, away_id, away, home_score, away_score,
+               home_pts, away_pts, hall_id, hall, city, oil_pattern, scheme_id,
+               has_been_played, first_seen_played)
+            VALUES
               (:mid,:season,:div_id,:div,:league,:round,:played_at,
                :home_id,:home,:away_id,:away,:home_score,:away_score,
-               :home_pts,:away_pts,:hall_id,:hall,:city,:oil,:scheme,:played)
+               :home_pts,:away_pts,:hall_id,:hall,:city,:oil,:scheme,:played,
+               :first_seen)
             ON CONFLICT(match_id) DO UPDATE SET
               home_score=excluded.home_score, away_score=excluded.away_score,
               home_pts=excluded.home_pts, away_pts=excluded.away_pts,
-              played_at=excluded.played_at, has_been_played=excluded.has_been_played
+              played_at=excluded.played_at, has_been_played=excluded.has_been_played,
+              -- stamped once, the first time BITS admits the match was played
+              first_seen_played=COALESCE(bits_match.first_seen_played,
+                                         excluded.first_seen_played)
         """, dict(
             mid=m["matchId"], season=season, div_id=m["matchDivisionId"],
             div=m["matchDivisionName"], league=m["matchLeagueName"],
@@ -29,7 +42,8 @@ def sync_season(con, api, season, verbose=True):
             home_pts=m["matchHomeTeamResult"], away_pts=m["matchAwayTeamResult"],
             hall_id=m["matchHallId"], hall=m["matchHallName"], city=m["matchHallCity"],
             oil=m["matchOilPatternName"], scheme=m["matchSchemeId"],
-            played=1 if m["matchHasBeenPlayed"] else 0))
+            played=1 if m["matchHasBeenPlayed"] else 0,
+            first_seen=now if m["matchHasBeenPlayed"] else None))
     con.commit()
 
     for div in sorted(divisions):

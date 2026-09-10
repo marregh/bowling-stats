@@ -91,7 +91,12 @@ CREATE TABLE IF NOT EXISTS bits_match (
     home_score INTEGER, away_score INTEGER,
     home_pts REAL, away_pts REAL,
     hall_id INTEGER, hall TEXT, city TEXT,
-    oil_pattern TEXT, scheme_id TEXT, has_been_played INTEGER
+    oil_pattern TEXT, scheme_id TEXT, has_been_played INTEGER,
+    -- When the collector first saw this match marked played. BITS flips
+    -- has_been_played only once someone registers the protocol, and how long
+    -- that takes is the thing that decides when the collectors are worth
+    -- running. Recording it turns that from a guess into a measurement.
+    first_seen_played TEXT
 );
 CREATE TABLE IF NOT EXISTS bits_result (
     match_id INTEGER NOT NULL, lic TEXT NOT NULL, player TEXT, side TEXT,
@@ -99,6 +104,15 @@ CREATE TABLE IF NOT EXISTS bits_result (
     hcp INTEGER, total INTEGER, series INTEGER,
     lane_point REAL, rank_points REAL, place INTEGER,
     PRIMARY KEY (match_id, lic)
+);
+CREATE TABLE IF NOT EXISTS notified (
+    -- What has already been announced, so a re-run is silent rather than
+    -- spamming the channel again. Everything else here is safe to re-run
+    -- because it upserts; this one is safe because it remembers.
+    match_id INTEGER NOT NULL,
+    kind     TEXT NOT NULL,
+    ts       TEXT,
+    PRIMARY KEY (match_id, kind)
 );
 CREATE TABLE IF NOT EXISTS bits_standing (
     season INTEGER, division_id INTEGER, team_id INTEGER, team TEXT,
@@ -109,9 +123,28 @@ CREATE TABLE IF NOT EXISTS bits_standing (
 """
 
 
+def migrate(con):
+    """Columns added after a database already existed.
+
+    CREATE TABLE IF NOT EXISTS silently leaves an older table alone, so a new
+    column has to be added by hand. Cheap enough to check on every connect.
+    """
+    have = {r[1] for r in con.execute("PRAGMA table_info(bits_match)")}
+    if "first_seen_played" not in have:
+        con.execute("ALTER TABLE bits_match ADD COLUMN first_seen_played TEXT")
+        # Matches already recorded as played were played before anyone was
+        # watching. Stamping them "now" would read as a real observation and
+        # make every lag calculation nonsense, so they are marked as what they
+        # are and excluded from the measurement.
+        con.execute("UPDATE bits_match SET first_seen_played = 'backfilled' "
+                    "WHERE has_been_played = 1")
+        con.commit()
+
+
 def connect():
     DB.parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(DB)
     con.row_factory = sqlite3.Row
     con.executescript(SCHEMA)
+    migrate(con)
     return con

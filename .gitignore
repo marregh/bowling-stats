@@ -5,6 +5,12 @@ data/*.db
 data/*.db-journal
 data/*.db-wal
 data/*.sqlite
+# ...and copies of it. "data/*.db" does not match club.db.bak-20260910, so a
+# routine backup before a migration sat one `git add -A` away from publishing
+# every name and licence number in the club.
+data/*.bak*
+data/*.backup*
+data/*.db.*
 !data/sample.db
 
 # Service and collector output
@@ -14,7 +20,8 @@ logs/
 # Generated exports
 *.xlsx
 
-# Secrets: SWEBOWL_API_KEY and friends
+# Secrets. The BITS collector no longer needs a key, but .env now holds the
+# Discord webhook URL, which is a credential: anyone with it can post.
 .env
 .env.*
 

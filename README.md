@@ -4,30 +4,46 @@ Two data sources, joined by player.
 
 ## 1. BITS (Swebowl) — league results.  Solved.
 
-`https://api.swebowl.se/api/v1`. The key is public in the sense that Swebowl's
-own web client sends it in the clear, but it is theirs rather than ours, so it
-is not committed here. Lift it from any request `bits.swebowl.se` makes to
-`api.swebowl.se` (query string, `APIKey=`) and export it as `SWEBOWL_API_KEY`
-before running a collector.
+`https://bits.swebowl.se/MiscFrontApiConnector`. **No API key, no login, no
+session warm-up** — this is the same-origin connector the BITS site's own pages
+call, and it holds Swebowl's key server-side. Send a browser `User-Agent` and
+`Referer: https://bits.swebowl.se/seriespel` and ask:
 
-**Auth quirk (this one bit twice):** every call returns an *empty-bodied* 401
-until the same session has loaded **bits.swebowl.se itself** — the API checks a
-session the site establishes, not just the `ARRAffinity` cookie api.swebowl.se
-hands out. Warm up with `GET https://bits.swebowl.se/` then `GET .../api/v1/`,
-reuse the session, and send `Referer: https://bits.swebowl.se/`. The session also
-lapses when idle, so `bits.py` treats any 401 as "re-warm and retry", not a
-failure. A wrong *header* name gives `{"message":"API key is missing."}`; the key
-belongs in the query string.
+| `bits.py` | connector |
+|---|---|
+| `matches(season)` | `ListMatches?seasonId=&clubId=` |
+| `standing(season, div)` | `GetStandings?seasonId=&divisionId=` |
+| `match_results(id, scheme)` | `GetMatchResults?matchId=&matchSchemeId=` |
+| `seasons()` / `teams(...)` | `Season` / `Team?clubId=&seasonId=` |
 
-| Endpoint | Returns |
+Endpoint names come from the inline JS on the `seriespel` and `match-detail`
+pages. `ListMatches` returns more than the old `/Match` did: `matchDateTime`,
+`matchHallName`/`City`, `matchDivisionName`, `matchSchemeId`, oil pattern and
+`matchHasBeenPlayed`.
+
+**Why not `api.swebowl.se` any more (changed 2026-09-10).** That host used to
+answer anyone holding Swebowl's public web-client key. It now answers *that key*
+with a bare IIS **403**, while a made-up key still gets the ordinary
+empty-bodied 401 — so the key is recognised and refused, not missing. Nothing
+about the request shape helps: headers, `Origin`/`Referer`, HTTP/2, query string
+vs header all give the same 403. The old auth quirk (empty 401 until the session
+had loaded bits.swebowl.se, `Referer` required, session lapsing when idle) is
+history along with the host; it cost real debugging time twice and is written
+down here only so it is not mistaken for the current failure.
+
+This went unnoticed for nine days because nothing schedules the collector — see
+**Keeping it current** below.
+
+| Endpoint (all under the connector) | Returns |
 | --- | --- |
 | `/Season` | season ids (2026 = 2026/2027) |
+| `/Club?seasonId=` | every club, for id lookup |
 | `/Team?clubId=&seasonId=` | the club's teams |
-| `/Standing?seasonId=&divisionId=` | division table |
-| `/Match?seasonId=&clubId=` | fixtures: date, hall, opponent, `matchSchemeId` |
-| `/matchResult/GetMatchResults?matchId=&matchSchemeId=` | per-player, per-game scores |
-| `/player/PlayerDetail`, `/PlayerDetailGraphData` | player history |
-| `/Club/ClubsForPlayerRanking?seasonId=` | club id lookup |
+| `/GetStandings?seasonId=&divisionId=` | division table |
+| `/ListMatches?seasonId=&clubId=` | fixtures: date, hall, opponent, `matchSchemeId` |
+| `/GetMatchResults?matchId=&matchSchemeId=` | per-player, per-game scores |
+| `/GetMatchHeadInfo`, `/GetMatchScores` | match detail, not used yet |
+| `/Division`, `/Hall`, `/County` | lookups |
 
 Club id **33651**. Teams: A 90611 (Sydallsvenskan), B 162063 (Skåne Syd 1),
 F1 107121 (Div 2 Södra Götaland 2), F2 184677 (Div 3 Södra Götaland 3),
@@ -62,6 +78,50 @@ before December is gone.
 
 This obsoletes the scoresheet-OCR path entirely. `sheet.py`/`decode.py` are kept
 only because they still work, not because anything needs them.
+
+## 3. scoring.se (Meriq) — the halls Bowlit does not reach.  UNPROVEN.
+
+One JPEG per lane, regenerated as play goes on:
+
+```
+https://scoring.se/{alley}/{session}/{lane}_small.jpg     360x270  (the ceiling)
+https://scoring.se/{alley}/{session}/{lane}_micro.jpg     240x180
+```
+
+Baltiska Bowlinghallen (Malmö) is alley **524** and carries **20 of our fixtures
+a season**. Also covered: Eslöv 443, Klippan 497, Trelleborg 661, Nässjö 645,
+Höganäs 478, Strike & Co Göteborg 637, Ed 438 — about 33 matches in all.
+**Helsingborg is not on scoring.se**; there is no Olympia in its 50-hall list,
+so Baltiska is the only hall we use where two league matches run at once.
+
+Three constraints, all verified rather than assumed:
+
+- **Nothing is retroactive.** Only today's `showdate` returns images; every
+  earlier day comes back empty, last Saturday included. A match not captured
+  while it is played is gone.
+- **360x270 is the maximum.** `_big`, `_large`, `_full` and a bare name all 404,
+  and the "2 stora skärmar" on the all-lanes page are these same files scaled up
+  in the browser. Asking for fewer lanes does not help: lane 5 is the same URL
+  whether the page is opened at startlane 1, 3 or 5.
+- **The board shows only the current game.** Earlier games' frames are already
+  gone from it, so polling must happen at least once per game.
+
+For comparison, the shelved scoresheet decoder was built against **480x270
+lossless PNGs**; these are 360x270 JPEGs at about an eighth the bytes. Whether
+eight players' frames survive that is the open question — which is why
+`capture_scoring.py` stores raw images and decodes nothing.
+
+Which lanes to watch comes from BITS: `ListMatches` returns
+`matchAlleyGroupName` ("5 - 12"), and `ListMatches?hallId=` gives every match at
+a hall, not just ours.
+
+```powershell
+.\capture_scoring.ps1 -Alley 524 -Lanes 5-12 -Until 10:35   # logs to logs/scoring.log
+python collector/capture_scoring.py --once                   # one sweep
+```
+
+Captures land in the `capture` table as `slug = "scoring:524"`, deduplicated by
+hash, with the session id in `book_id`.
 
 ### The old live-scoring route (superseded)
 
@@ -117,8 +177,11 @@ Ground truth for four player rows is in the spike tests, verified arithmetically
 ```powershell
 python -m venv .venv; .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-$env:SWEBOWL_API_KEY = "<key from bits.swebowl.se>"   # collectors only
 ```
+
+Nothing to configure: the BITS collector needs no key. `BITS_CLUB_ID` and
+`LUMA_DB` can be set to point at another club or another database file, and
+both have working defaults.
 
 ```powershell
 python collector/fetch_bits.py 2025 2026   # mirror BITS (safe to re-run)
@@ -132,6 +195,74 @@ un.ps1                                  # dashboard on 127.0.0.1:8768
 `data/club.db` holds everything. The `capture` table is irreplaceable — raw
 scoresheet PNGs that cannot be re-fetched once a lane is rebooked. The `decode`
 table is derived and can be rebuilt as the decoder improves.
+
+### Keeping it current
+
+`collect.ps1` runs one pass — BITS, then frame data, then Discord — and the
+scheduled task **`LumaBowlingCollector`** runs it Saturdays and Sundays at 18:00
+and 21:00 plus a daily 08:00 catch-up, logging to `logs/collect.log`. The order
+inside is not a preference: `fetch_social.py` only looks at matches BITS has
+already marked played, and notifications go last so a message always means the
+data is there.
+
+Nothing scheduled it before 2026-09-10, which is how the `api.swebowl.se` 403
+went unnoticed for nine days: the dashboard kept serving, just from a database
+that had stopped growing. The three collectors have genuinely different stakes,
+and only one of them has a real deadline.
+
+| | what a missed run costs | how often |
+|---|---|---|
+| `fetch_bits.py` | **nothing permanent.** BITS keeps results, standings and fixtures indefinitely, so catching up is just re-running it. A gap means a stale dashboard, not lost data | daily, or after each round |
+| `fetch_social.py` | **eventually everything.** social.bowlit.nu retains roughly nine months; anything older is gone for good | weekly is ample |
+| `capture.py` | the raw scoresheet for that lane, which cannot be re-fetched once it is rebooked | only useful *during* play, and only for casual games |
+
+`capture.py` cannot usefully be scheduled blind — it has to run while people are
+bowling, which is what `capture.ps1` is for. It also only earns its keep for
+practice and friendlies now: league play is retroactive through
+social.bowlit.nu, keyed by the BITS match id.
+
+So the one worth scheduling for *preservation* is `fetch_social.py`. Scheduling
+`fetch_bits.py` is worth it for a different reason — it is the thing that fails
+loudly when Swebowl changes something, and a collector nobody runs is a
+collector nobody notices breaking.
+
+### Discord notifications
+
+`collector/notify_new.py` posts a match to a Discord webhook once its results
+are in the database — never before, so a message always means "there is
+something to look at". It runs last in `collect.ps1`.
+
+Configure in `.env` (gitignored; the webhook URL is a credential — anyone
+holding it can post to the channel):
+
+```
+LUMA_DISCORD_WEBHOOK=https://discord.com/api/webhooks/...
+LUMA_PUBLIC_BASE=https://<your-domain>/luma-bowling   # optional, adds a dashboard link
+LUMA_NOTIFY_PLAYERS=1                               # 0 drops the per-player scores
+```
+
+**Run `--seed` once before the first real run.** It marks everything already
+collected as announced without sending anything; skip it and the first run
+posts an entire season in one go.
+
+```
+python collector/notify_new.py --seed       # once, at setup
+python collector/notify_new.py --dry-run    # print payloads, send nothing
+python collector/notify_new.py --match 123  # re-announce one match
+```
+
+Each message carries the result and points, the division, the hall, our own
+players' game scores, and links to BITS, to the frame-by-frame sheet when the
+alley runs Bowlit, and to the dashboard when `LUMA_PUBLIC_BASE` is set. The
+dashboard link carries `?season=`, because the site reads it (`season_arg`) to
+decide which season the whole view is about and otherwise defaults to the
+newest — which would open the current season around a match from a past one. Sends
+are recorded in `notified`, so re-running is silent rather than duplicating.
+
+What is deliberately left out: **licence numbers** (they encode a birth date)
+and opponents' individual scores. Our own players' scores are the point;
+everyone else's are not ours to republish. Worth a thought for the U team,
+which is a youth side — `LUMA_NOTIFY_PLAYERS=0` drops player lines entirely.
 
 ### The database is not in this repository
 

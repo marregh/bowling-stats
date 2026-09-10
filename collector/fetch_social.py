@@ -15,6 +15,11 @@ from store import connect
 
 ALLEYS = {"Lunds Bowlinghall": 1037, "Lerum Pinyard Bowling": 1069}
 
+# How long an empty result stays worth retrying. Long enough to cover a sheet
+# that appears late or a weekend of failed runs, short enough that the 50-odd
+# away matches at non-Bowlit alleys are not re-asked forever.
+RETRY_DAYS = 14
+
 
 def ingest(con, match_id, alley_id):
     parsed = social.parse(social.fetch(match_id, alley=alley_id))
@@ -100,7 +105,23 @@ def main():
         ORDER BY m.played_at
     """, seasons).fetchall()
 
-    done = {r[0] for r in con.execute("SELECT match_id FROM social_fetch")} if not a.refetch else set()
+    # A match that came back empty is normally final -- the alley does not run
+    # Bowlit and never will. But an empty answer for a match played *today* is
+    # more likely to mean the sheet has not been published yet, and the old
+    # rule ("in social_fetch at all -> never ask again") made that permanent:
+    # one eager run and the frame data was lost until someone noticed and
+    # passed --refetch. So an empty stays open for a while, then settles.
+    if a.refetch:
+        done = set()
+    else:
+        done = {r[0] for r in con.execute(f"""
+            SELECT sf.match_id
+            FROM social_fetch sf
+            LEFT JOIN bits_match m ON m.match_id = sf.match_id
+            WHERE sf.games > 0
+               OR m.played_at IS NULL
+               OR julianday('now') - julianday(m.played_at) > {RETRY_DAYS}
+        """)}
     hit = miss = 0
     for r in rows:
         alley = ALLEYS.get(r["hall"])
