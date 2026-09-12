@@ -6,6 +6,30 @@ so anything computed here can be checked against them -- see verify().
 import json
 
 
+def racks(fr, is_tenth):
+    """A frame's balls grouped into racks -- one full set of ten pins each.
+
+    Frames 1-9 are always a single rack. The tenth is not: a strike there earns
+    a fresh rack, so "X 6 /" is a strike and then a genuine spare attempt, and
+    "X X 8" is two strikes and a single bonus ball that can never be a spare.
+
+    Counting per frame instead of per rack is what made the spare column
+    disagree with itself -- a tenth-frame spare after a strike was counted in
+    `spares` while never adding a chance to compare it against.
+    """
+    if not is_tenth:
+        return [fr]
+    out, i = [], 0
+    while i < len(fr):
+        if fr[i]["ball"] == "X":
+            out.append(fr[i:i + 1])
+            i += 1
+        else:
+            out.append(fr[i:i + 2])
+            i += 2
+    return out
+
+
 def split_frames(balls):
     """Group a flat ball list into 10 frames. Frame 10 takes the remainder."""
     frames, i = [], 0
@@ -27,11 +51,13 @@ def stats(balls):
     # the honest denominator for a conversion rate.
     s = dict(frames=0, strikes=0, spares=0, opens=0, misses=0, splits=0,
              split_first=0, split_converted=0, spare_chances=0,
-             makable=0, makable_made=0,
+             makable=0, makable_made=0, split_tries=0, split_made=0,
              single_pin=0, single_pin_made=0, first_ball_pins=0, first_balls=0)
-    for fr in split_frames(balls):
+    parts = split_frames(balls)
+    for fi, fr in enumerate(parts):
         if not fr:
             continue
+        is_tenth = (fi == len(parts) - 1)
         s["frames"] += 1
         for j, b in enumerate(fr):
             tok, sp = b["ball"], b["split"]
@@ -55,6 +81,23 @@ def stats(balls):
                 s["splits"] += 1
                 if is_first:
                     s["split_first"] += 1
+        # Spare accounting, per rack. An attempt is a rack whose first ball
+        # left pins AND that had a second ball to knock them down with -- the
+        # lone bonus ball of "X X 8" is neither a spare nor a miss. Splits are
+        # counted apart: they are their own column, with their own conversion
+        # rate, and folding them in here made both the made-count and the
+        # total read as something they were not.
+        for rk in racks(fr, is_tenth):
+            if rk[0]["ball"] == "X" or len(rk) < 2:
+                continue
+            made = rk[1]["ball"] == "/"
+            if rk[0]["split"]:
+                s["split_tries"] += 1
+                s["split_made"] += made
+            else:
+                s["makable"] += 1
+                s["makable_made"] += made
+
         # a spare chance is any frame whose first ball left pins standing
         if fr and fr[0]["ball"] != "X":
             s["spare_chances"] += 1
@@ -65,10 +108,6 @@ def stats(balls):
             # with its own conversion rate. Splits are hard by definition, so
             # the honest question for the spare game is what happened to the
             # leaves that were there to be made.
-            if not fr[0]["split"]:
-                s["makable"] += 1
-                if len(fr) > 1 and fr[1]["ball"] == "/":
-                    s["makable_made"] += 1
             if _num(fr[0]["ball"]) == 9:
                 s["single_pin"] += 1
             if len(fr) > 1 and fr[1]["ball"] not in ("/",):

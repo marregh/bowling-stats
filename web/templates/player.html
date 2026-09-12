@@ -49,9 +49,13 @@
   <div class="card"><div class="k">Strike%</div>
     <div class="v">{{ pct(shots['strikes'], shots['frames']) | round(1) }}</div>
     <div class="s">{{ shots['strikes'] }} strikes</div></div>
+  {% set mk = shots.get('makable') %}
+  {% set made = shots['makable_made'] if mk is not none else shots['spares'] %}
+  {% set tries = mk if mk is not none else shots['spare_chances'] %}
   <div class="card"><div class="k">Spärr%</div>
-    <div class="v">{{ pct(shots['spares'], shots['spare_chances']) | round(1) }}</div>
-    <div class="s">{{ shots['spares'] }} av {{ shots['spare_chances'] }} lägen</div></div>
+    <div class="v">{{ pct(made, tries) | round(1) }}</div>
+    <div class="s">{{ made }} av {{ tries }} makliga lägen{% if shots.get('split_tries') %},
+      plus {{ shots['split_made'] }}/{{ shots['split_tries'] }} splits{% endif %}</div></div>
   <div class="card"><div class="k">Snitt 1:a klot</div>
     <div class="v">{{ (shots['first_ball_pins'] / shots['first_balls']) | round(2) }}</div>
     <div class="s">{{ shots['first_balls'] }} första klot</div></div>
@@ -75,9 +79,9 @@
     <td class="num mut">{{ m['games'] }}</td>
     <td class="num">{{ m['pins'] }}</td>
     <td class="num">{{ st['strikes'] }} <span class="mut">({{ pct(st['strikes'], st['frames']) | round(0) | int }}%)</span></td>
-    <td class="num">{{ st['spares'] }}<span class="mut">/{{ st['spare_chances'] }} ({{ pct(st['spares'], st['spare_chances']) | round(0) | int if st['spare_chances'] else 0 }}%)</span></td>
+    {% set mk = st.get('makable') %}{% set made = st['makable_made'] if mk is not none else st['spares'] %}{% set tries = mk if mk is not none else st['spare_chances'] %}<td class="num">{{ made }}<span class="mut">/{{ tries }} ({{ pct(made, tries) | round(0) | int if tries else 0 }}%)</span></td>
     <td class="num">{{ st['split_first'] }}<span class="mut"> ({{ pct(st['split_first'], st['first_balls']) | round(1) if st['first_balls'] else 0 }}%)</span></td>
-    <td class="num">{% set mk = st.get('makable') %}{% set miss = (st['makable'] - st['makable_made']) if mk is not none else (st['spare_chances'] - st['spares']) %}{% set den = mk if mk is not none else st['spare_chances'] %}{{ miss }}<span class="mut">/{{ den }} ({{ pct(miss, den) | round(1) if den else 0 }}%)</span></td>
+    <td class="num">{{ tries - made }}<span class="mut">/{{ tries }} ({{ pct(tries - made, tries) | round(1) if tries else 0 }}%)</span></td>
     <td class="num">{{ st['single_pin'] - st['single_pin_made'] }}<span class="mut">/{{ st['single_pin'] }} ({{ pct(st['single_pin'] - st['single_pin_made'], st['single_pin']) | round(1) if st['single_pin'] else 0 }}%)</span></td>
   </tr>
 {% endfor %}

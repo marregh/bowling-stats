@@ -942,9 +942,13 @@ def shots():
                     "cov_games": t["league"], "bits_games": played,
                     "cov_pct": pct(t["league"], played),
                     "strike_pct": pct(v["strikes"], v["frames"]),
-                    "spare_pct": pct(v["spares"], v["spare_chances"]),
+                    # Made and attempted must count the same population, or
+                    # the column contradicts itself: 11 of 16 when 11 was every
+                    # spare anywhere and 16 counted only frames.
+                    "spare_pct": pct(v["makable_made"], v["makable"]),
+                    "spare_made": v["makable_made"], "spare_tries": v["makable"],
                     "split_pct": pct(v["split_first"], v["first_balls"]),
-                    "split_conv": pct(v["split_converted"], v["split_first"]),
+                    "split_conv": pct(v["split_made"], v["split_tries"]),
                     # An open frame is one that was neither struck nor spared.
                     # frames.opens counts that per frame; the old
                     # spare_chances - spares undercounted it, because a tenth
