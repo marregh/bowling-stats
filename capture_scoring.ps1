@@ -8,6 +8,8 @@ param(
     [string] $Lanes    = "5-12",
     [string] $Until    = "",         # HH:MM, local
     [int]    $Minutes  = 0,
+    [double] $Hours    = 3,          # a four-game match runs ~2h10m, not the
+                                     # 1h40m the BITS schedule implies
     [int]    $Interval = 75
 )
 
@@ -34,6 +36,7 @@ $args = @("collector\capture_scoring.py", "--alley", $Alley, "--lanes", $Lanes,
           "--interval", $Interval)
 if ($Until)        { $args += @("--until", $Until) }
 elseif ($Minutes)  { $args += @("--minutes", $Minutes) }
+else               { $args += @("--hours", $Hours) }
 
 # Not Tee-Object: it has no -Encoding in PowerShell 5.1 and writes UTF-16,
 # which left a log that was half UTF-8 (written interactively) and half UTF-16

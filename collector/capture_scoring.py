@@ -123,6 +123,12 @@ def main():
                          "that gap is the only chance at a finished board")
     ap.add_argument("--until", help="stop at this local time, HH:MM")
     ap.add_argument("--minutes", type=int, help="stop after this many minutes")
+    ap.add_argument("--hours", type=float, default=3.0,
+                    help="default stop, in hours. A four-game league match runs "
+                         "about 2h10m -- the first capture used the 1h40m the BITS "
+                         "schedule implies and stopped during game 3 of 4, missing "
+                         "game 4 entirely. The next match's scheduled time on the "
+                         "same lane group is nominal, not a real handover.")
     ap.add_argument("--once", action="store_true")
     a = ap.parse_args()
 
@@ -139,6 +145,8 @@ def main():
         stop = datetime.now().replace(hour=h, minute=mi, second=0, microsecond=0)
     elif a.minutes:
         stop = datetime.fromtimestamp(time.time() + a.minutes * 60)
+    elif a.hours:
+        stop = datetime.fromtimestamp(time.time() + a.hours * 3600)
 
     print(f"scoring.se hall {a.alley}, banor {lanes[0]}-{lanes[-1]}, "
           f"showdate {showdate}, var {a.interval}s"

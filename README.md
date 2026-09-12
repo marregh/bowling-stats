@@ -123,6 +123,52 @@ python collector/capture_scoring.py --once                   # one sweep
 Captures land in the `capture` table as `slug = "scoring:524"`, deduplicated by
 hash, with the session id in `book_id`.
 
+### Reading the totals row — works, and is proved against BITS
+
+`collector/decode_scoring.py` reads the running-totals row off a captured board.
+The totals first, not the frames: they are digits only, and unlike the frames
+they are **self-checking**. Totals climb, each step is a legal frame score of
+0..30, and the last is the game score, which BITS publishes independently.
+
+Measured on the first capture (Baltiska, 12 Sep, 1329 images):
+
+| | |
+|---|---|
+| complete rows that also satisfied the arithmetic | **16** |
+| of those, whose total is a real BITS game score | **16** |
+| false positives | **0** |
+
+45 distinct scores over a ~180-wide range, so 16 straight matches is not luck.
+Precision is the property being claimed here, not recall: a cell that cannot be
+read confidently comes back `None` and the row is rejected, which is why the
+rows that survive are trustworthy.
+
+Recall is the weak half, and the reasons are known rather than mysterious:
+
+- **the overlay.** "Nästa bana: N" sits across frames 2-4 through the closing
+  frames of every game — exactly when the board is finally complete. `--stitch`
+  is the answer: a total never changes once printed, so each cell is voted on
+  across every capture of that game, and the covered frames are recovered from
+  before the overlay appeared.
+- **game segmentation** currently starts a new game when frame 1's total drops,
+  which one misread of "20" as "0" also does. The board prints "Serie 3" in its
+  top corner; reading that is the honest fix and needs its own templates.
+- **the capture window.** The first run stopped during game 3 of 4.
+
+Two geometry facts that cost real debugging: the horizontal rules at y = 71, 90,
+133 and 152 are dark across the full width, so including one in the band makes
+every column look occupied and the digits refuse to separate; and the tenth
+frame is half as wide again — three ball boxes — so a uniform cell width clips
+its last digit and turns 248 into 24.
+
+```
+python collector/decode_scoring.py --lane 5            # per image
+python collector/decode_scoring.py --stitch            # merged per game
+```
+
+Templates are in `collector/scoring_digits.npz`: 28 of them over the ten digits,
+built by clustering 8084 real glyphs and labelling the clusters by eye.
+
 ### The old live-scoring route (superseded)
 
 `POST https://livescoring.bowlit.nu/api/getlanes`, body `Slug=lunds-bowling`,
