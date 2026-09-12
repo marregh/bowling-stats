@@ -17,6 +17,12 @@ $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $here
 
+# Text has to survive two hops: Python's stdout, and PowerShell decoding it.
+# Left alone, Python emits cp1252 and PowerShell reads cp437, which turned
+# "banor på skärmen" into "banor pσ skΣrmen" in the log. Pin both to UTF-8.
+$env:PYTHONIOENCODING = 'utf-8'
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
 $python = if (Test-Path "$here\.venv\Scripts\python.exe") {
     "$here\.venv\Scripts\python.exe"
 } else {

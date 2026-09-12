@@ -15,6 +15,12 @@ $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $here
 
+# Text has to survive two hops: Python's stdout, and PowerShell decoding it.
+# Left alone, Python emits cp1252 and PowerShell reads cp437, which turned
+# "banor på skärmen" into "banor pσ skΣrmen" in the log. Pin both to UTF-8.
+$env:PYTHONIOENCODING = 'utf-8'
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
 $python = if (Test-Path "$here\.venv\Scripts\python.exe") {
     "$here\.venv\Scripts\python.exe"
 } else {
@@ -29,14 +35,19 @@ $args = @("collector\capture_scoring.py", "--alley", $Alley, "--lanes", $Lanes,
 if ($Until)        { $args += @("--until", $Until) }
 elseif ($Minutes)  { $args += @("--minutes", $Minutes) }
 
-"{0}  start: hall {1}, banor {2}{3}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'),
-    $Alley, $Lanes, $(if ($Until) { ", till $Until" } else { "" }) |
-    Tee-Object -FilePath $log -Append
-
-& $python $args 2>&1 | ForEach-Object {
-    "{0}  {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $_ |
-        Tee-Object -FilePath $log -Append
+# Not Tee-Object: it has no -Encoding in PowerShell 5.1 and writes UTF-16,
+# which left a log that was half UTF-8 (written interactively) and half UTF-16
+# (written by the scheduled task) and readable as neither. Add-Content takes an
+# explicit encoding, and is what collect.ps1 already uses.
+function Write-Log($text) {
+    $line = "{0}  {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $text
+    Write-Host $line
+    Add-Content -Path $log -Value $line -Encoding utf8
 }
 
-"{0}  slut (exit {1})" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $LASTEXITCODE |
-    Tee-Object -FilePath $log -Append
+Write-Log ("start: hall {0}, banor {1}{2}" -f $Alley, $Lanes,
+           $(if ($Until) { ", till $Until" } else { "" }))
+
+& $python $args 2>&1 | ForEach-Object { Write-Log "   $_" }
+
+Write-Log "slut (exit $LASTEXITCODE)"
