@@ -28,9 +28,9 @@
     {% if s['covered'] %}
       {% set st = p['st'] %}
       {% if st %}
-        <td class="num">{{ st['strikes'] }} <span class="mut">({{ pct(st['strikes'], st['frames']) | round(0) | int }}%)</span></td>
+        <td class="num">{{ st['strikes'] }} <span class="mut">({{ pct(st['strikes'], st.get('racks') or st['frames']) | round(0) | int }}%)</span></td>
         {% set mk = st.get('makable') %}{% set made = st['makable_made'] if mk is not none else st['spares'] %}{% set tries = mk if mk is not none else st['spare_chances'] %}<td class="num">{{ made }}<span class="mut">/{{ tries }} ({{ pct(made, tries) | round(0) | int if tries else 0 }}%)</span></td>
-        <td class="num">{{ st['split_first'] }}<span class="mut"> ({{ pct(st['split_first'], st['first_balls']) | round(1) if st['first_balls'] else 0 }}%)</span></td>
+        <td class="num">{{ st.get('split_racks', st['split_first']) }}<span class="mut"> ({{ pct(st.get('split_racks', st['split_first']), st['first_balls']) | round(1) if st['first_balls'] else 0 }}%)</span></td>
         <td class="num">{{ tries - made }}<span class="mut">/{{ tries }} ({{ pct(tries - made, tries) | round(1) if tries else 0 }}%)</span></td>
         <td class="num">{{ st['single_pin'] - st['single_pin_made'] }}<span class="mut">/{{ st['single_pin'] }}</span></td>
       {% else %}
@@ -49,14 +49,14 @@
   <td></td><td class="mut">{{ s['covered'] }} av {{ s['players'] | length }} med slagdata</td>
   <td></td><td></td><td></td><td></td>
   <td class="num">{{ s['score'] }}</td><td></td><td></td>
-  <td class="num mut">{{ pct(s['st']['strikes'], s['st']['frames']) | round(0) | int }}%</td>
+  <td class="num mut">{{ pct(s['st']['strikes'], s['st'].get('racks') or s['st']['frames']) | round(0) | int }}%</td>
   {% set fmk = s['st'].get('makable') %}
   {% set fmade = s['st']['makable_made'] if fmk is not none else s['st']['spares'] %}
   {% set ftries = fmk if fmk is not none else s['st']['spare_chances'] %}
   <td class="num mut">{{ fmade }}/{{ ftries }}
     ({{ pct(fmade, ftries) | round(0) | int if ftries else 0 }}%)</td>
-  <td class="num mut">{{ s['st']['split_first'] }}
-    ({{ pct(s['st']['split_first'], s['st']['first_balls']) | round(1) }}%)</td>
+  <td class="num mut">{{ s['st'].get('split_racks', s['st']['split_first']) }}
+    ({{ pct(s['st'].get('split_racks', s['st']['split_first']), s['st']['first_balls']) | round(1) }}%)</td>
   <td class="num mut">{{ ftries - fmade }}</td>
   <td class="num mut">{{ s['st']['single_pin'] - s['st']['single_pin_made'] }}/{{ s['st']['single_pin'] }}</td>
 </tr></tfoot>
@@ -80,7 +80,7 @@
     <div class="k">{{ s['name'] | team }}</div>
     <div class="v">{{ s['points'] | round(0) | int if s['points'] is not none else '–' }}</div>
     <div class="s">{{ s['score'] }} käglor
-      {%- if s['covered'] %} &middot; {{ pct(s['st']['strikes'], s['st']['frames']) | round(0) | int }}% strike{% endif %}</div>
+      {%- if s['covered'] %} &middot; {{ pct(s['st']['strikes'], s['st'].get('racks') or s['st']['frames']) | round(0) | int }}% strike{% endif %}</div>
   </div>
   {% endfor %}
 </div>

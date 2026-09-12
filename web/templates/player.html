@@ -47,7 +47,7 @@
   {%- else %}{{ per_match | length }} tillfällen{% endif %} med Bowlit-data)</span></h2>
 <div class="cards">
   <div class="card"><div class="k">Strike%</div>
-    <div class="v">{{ pct(shots['strikes'], shots['frames']) | round(1) }}</div>
+    <div class="v">{{ pct(shots['strikes'], shots.get('racks') or shots['frames']) | round(1) }}</div>
     <div class="s">{{ shots['strikes'] }} strikes</div></div>
   {% set mk = shots.get('makable') %}
   {% set made = shots['makable_made'] if mk is not none else shots['spares'] %}
@@ -60,10 +60,10 @@
     <div class="v">{{ (shots['first_ball_pins'] / shots['first_balls']) | round(2) }}</div>
     <div class="s">{{ shots['first_balls'] }} första klot</div></div>
   <div class="card"><div class="k">Hål</div>
-    <div class="v">{{ shots['split_first'] }}<span class="s">
-      ({{ pct(shots['split_first'], shots['first_balls']) | round(1) }}%)</span></div>
+    <div class="v">{{ shots.get('split_racks', shots['split_first']) }}<span class="s">
+      ({{ pct(shots.get('split_racks', shots['split_first']), shots['first_balls']) | round(1) }}%)</span></div>
     <div class="s">{{ shots['split_converted'] }} tagna
-      &middot; {{ shots['split_first'] - shots['split_converted'] }} kvar öppna</div></div>
+      &middot; {{ shots.get('split_racks', shots['split_first']) - shots['split_converted'] }} kvar öppna</div></div>
 </div>
 
 <h2>Slag per match</h2>
@@ -78,9 +78,9 @@
     <td>{{ m['label'] | team }}{% if m['adhoc'] %} <span class="pill">träning</span>{% endif %}</td>
     <td class="num mut">{{ m['games'] }}</td>
     <td class="num">{{ m['pins'] }}</td>
-    <td class="num">{{ st['strikes'] }} <span class="mut">({{ pct(st['strikes'], st['frames']) | round(0) | int }}%)</span></td>
+    <td class="num">{{ st['strikes'] }} <span class="mut">({{ pct(st['strikes'], st.get('racks') or st['frames']) | round(0) | int }}%)</span></td>
     {% set mk = st.get('makable') %}{% set made = st['makable_made'] if mk is not none else st['spares'] %}{% set tries = mk if mk is not none else st['spare_chances'] %}<td class="num">{{ made }}<span class="mut">/{{ tries }} ({{ pct(made, tries) | round(0) | int if tries else 0 }}%)</span></td>
-    <td class="num">{{ st['split_first'] }}<span class="mut"> ({{ pct(st['split_first'], st['first_balls']) | round(1) if st['first_balls'] else 0 }}%)</span></td>
+    <td class="num">{{ st.get('split_racks', st['split_first']) }}<span class="mut"> ({{ pct(st.get('split_racks', st['split_first']), st['first_balls']) | round(1) if st['first_balls'] else 0 }}%)</span></td>
     <td class="num">{{ tries - made }}<span class="mut">/{{ tries }} ({{ pct(tries - made, tries) | round(1) if tries else 0 }}%)</span></td>
     <td class="num">{{ st['single_pin'] - st['single_pin_made'] }}<span class="mut">/{{ st['single_pin'] }} ({{ pct(st['single_pin'] - st['single_pin_made'], st['single_pin']) | round(1) if st['single_pin'] else 0 }}%)</span></td>
   </tr>

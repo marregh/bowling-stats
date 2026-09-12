@@ -183,6 +183,32 @@ python collector/decode_scoring.py --stitch            # merged per game
 Templates are in `collector/scoring_digits.npz`: 28 of them over the ten digits,
 built by clustering 8084 real glyphs and labelling the clusters by eye.
 
+### Shot statistics: count per rack, not per frame
+
+`python tests/test_frames.py` -- 6 constructed sequences against 8 invariants,
+then the same invariants over every player-game collected.
+
+The tenth frame is where this goes wrong. A strike there earns a fresh rack, so
+a frame is not always one rack, and any column whose numerator is counted per
+ball against a denominator counted per frame will disagree with itself. It has
+happened twice:
+
+- **Spärr** showed 11 made of 16 chances, where the 11 counted every spare
+  anywhere -- including a tenth-frame spare after a strike -- and the 16 counted
+  only frames. Now `makable_made / makable`, both per rack.
+- **Strike%** divided strikes by frames, so **a perfect game read 120%**. Twelve
+  strikes really are thrown in ten frames. Now over `racks`.
+
+Neither was visible in the data: nobody in the club had bowled 300, which is
+exactly why the test builds the sequence instead of waiting for it.
+
+Also per rack now, having silently ignored the tenth: single-pin chances (`X 9 /`
+converted a single pin and counted nothing), split rate, and first-ball average.
+
+`spares`, `strikes`, `misses`, `splits` and `frames` keep their per-ball
+meanings on purpose -- `verify()` checks those against Bowlit's own published
+aggregates, so redefining them would break the one external check there is.
+
 ### The old live-scoring route (superseded)
 
 `POST https://livescoring.bowlit.nu/api/getlanes`, body `Slug=lunds-bowling`,

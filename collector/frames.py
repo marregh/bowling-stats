@@ -52,6 +52,7 @@ def stats(balls):
     s = dict(frames=0, strikes=0, spares=0, opens=0, misses=0, splits=0,
              split_first=0, split_converted=0, spare_chances=0,
              makable=0, makable_made=0, split_tries=0, split_made=0,
+             racks=0, split_racks=0,
              single_pin=0, single_pin_made=0, first_ball_pins=0, first_balls=0)
     parts = split_frames(balls)
     for fi, fr in enumerate(parts):
@@ -62,9 +63,6 @@ def stats(balls):
         for j, b in enumerate(fr):
             tok, sp = b["ball"], b["split"]
             is_first = (j == 0)
-            if is_first:
-                s["first_balls"] += 1
-                s["first_ball_pins"] += 10 if tok == "X" else (0 if tok in "-/" else _num(tok))
             if tok == "X":
                 s["strikes"] += 1
             elif tok == "/":
@@ -73,8 +71,6 @@ def stats(balls):
                 # leave; later balls in the tenth are fresh racks, not conversions
                 if j == 1 and fr[0]["split"]:
                     s["split_converted"] += 1
-                if j == 1 and _num(fr[0]["ball"]) == 9:
-                    s["single_pin_made"] += 1
             elif tok == "-":
                 s["misses"] += 1
             if sp:
@@ -88,10 +84,22 @@ def stats(balls):
         # rate, and folding them in here made both the made-count and the
         # total read as something they were not.
         for rk in racks(fr, is_tenth):
-            if rk[0]["ball"] == "X" or len(rk) < 2:
+            b0 = rk[0]
+            tok0 = b0["ball"]
+            s["racks"] += 1
+            s["first_balls"] += 1
+            s["first_ball_pins"] += 10 if tok0 == "X" else (0 if tok0 in "-/" else _num(tok0))
+            if b0["split"]:
+                s["split_racks"] += 1
+            if _num(tok0) == 9:
+                # a single pin standing: the most makable leave there is
+                s["single_pin"] += 1
+                if len(rk) > 1 and rk[1]["ball"] == "/":
+                    s["single_pin_made"] += 1
+            if tok0 == "X" or len(rk) < 2:
                 continue
             made = rk[1]["ball"] == "/"
-            if rk[0]["split"]:
+            if b0["split"]:
                 s["split_tries"] += 1
                 s["split_made"] += made
             else:
@@ -108,8 +116,6 @@ def stats(balls):
             # with its own conversion rate. Splits are hard by definition, so
             # the honest question for the spare game is what happened to the
             # leaves that were there to be made.
-            if _num(fr[0]["ball"]) == 9:
-                s["single_pin"] += 1
             if len(fr) > 1 and fr[1]["ball"] not in ("/",):
                 s["opens"] += 1
     return s
