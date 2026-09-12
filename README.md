@@ -115,6 +115,20 @@ Which lanes to watch comes from BITS: `ListMatches` returns
 `matchAlleyGroupName` ("5 - 12"), and `ListMatches?hallId=` gives every match at
 a hall, not just ours.
 
+**Each hall skins the board, so the rows need calibrating per hall.** Baltiska
+is blue, Klippan orange, and the row pitch differs with it -- 19px against 17px:
+
+| hall | alley | player 1 totals | player 2 totals |
+|---|---|---|---|
+| Baltiska Malmö | 524 | y 72..89 | y 134..151 |
+| Klippans Bowlinghall | 497 | y 64..79 | y 126..141 |
+
+The **columns are identical** everywhere: frame boundaries land on 41, 74, 106
+… 335 at both, so the frame maths, the digit templates and the glyph font are
+all shared. Only the y bands go in `decode_scoring.PROFILES`. A hall renders a
+warm-up screen with no grid at all before the match ("Inspelning pågår"), so
+calibrate from a board that is actually in play.
+
 ```powershell
 .\capture_scoring.ps1 -Alley 524 -Lanes 5-12 -Until 10:35   # logs to logs/scoring.log
 python collector/capture_scoring.py --once                   # one sweep

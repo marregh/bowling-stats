@@ -38,7 +38,17 @@ from store import connect
 
 HERE = Path(__file__).resolve().parent
 X0, W = 8.3, 32.66
-BANDS = {"p1": (72, 90), "p2": (134, 152)}
+# Per hall. The columns are the same everywhere -- frame boundaries land on
+# 41, 74, 106 ... 335 at Klippan exactly as at Baltiska -- but the rows are not:
+# each hall skins the board (Baltiska blue, Klippan orange) and the row pitch
+# differs with it, 19px against 17px. Only the y bands need calibrating; the
+# digit templates, the column maths and the glyph font are shared.
+PROFILES = {
+    524: {"p1": (72, 90), "p2": (134, 152)},    # Baltiska Malmö
+    497: {"p1": (64, 80), "p2": (126, 142)},    # Klippans Bowlinghall
+}
+DEFAULT_ALLEY = 524
+BANDS = PROFILES[DEFAULT_ALLEY]
 NW, NH = 8, 15
 DARK = 115
 MAX_DIST = 2.6          # beyond this, call it unreadable
@@ -56,9 +66,9 @@ def _vec(g):
     return ((a - a.min()) / max(1.0, (a.max() - a.min()))).ravel()
 
 
-def digit_boxes(im, who, frame):
+def digit_boxes(im, who, frame, bands=None):
     """The separate glyphs in one totals cell, left to right."""
-    y0, y1 = BANDS[who]
+    y0, y1 = (bands or BANDS)[who]
     x0 = int(round(X0 + W * frame)) + 3
     # The tenth frame is half as wide again: it holds three ball boxes, not two,
     # and the cell runs to the table's right edge. Using the uniform width here
@@ -85,9 +95,9 @@ def digit_boxes(im, who, frame):
     return out
 
 
-def read_cell(im, who, frame, V, labels):
+def read_cell(im, who, frame, V, labels, bands=None):
     """The number in one totals cell: int, or None if empty or unreadable."""
-    boxes = digit_boxes(im, who, frame)
+    boxes = digit_boxes(im, who, frame, bands)
     if not boxes:
         return None
     digits = []
@@ -103,11 +113,12 @@ def read_cell(im, who, frame, V, labels):
         return None
 
 
-def read_totals(im, V=None, labels=None):
+def read_totals(im, V=None, labels=None, alley=DEFAULT_ALLEY):
     if V is None:
         V, labels = load_templates()
-    return {who: [read_cell(im, who, f, V, labels) for f in range(10)]
-            for who in BANDS}
+    bands = PROFILES.get(alley, BANDS)
+    return {who: [read_cell(im, who, f, V, labels, bands) for f in range(10)]
+            for who in bands}
 
 
 def check(totals):
