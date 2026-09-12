@@ -26,7 +26,7 @@
     <td class="num">{{ st['strikes'] }} <span class="mut">({{ pct(st['strikes'], st['frames']) | round(0) | int }}%)</span></td>
     <td class="num">{{ st['spares'] }}<span class="mut">/{{ st['spare_chances'] }} ({{ pct(st['spares'], st['spare_chances']) | round(0) | int if st['spare_chances'] else 0 }}%)</span></td>
     <td class="num">{{ st['split_first'] }}<span class="mut"> ({{ pct(st['split_first'], st['first_balls']) | round(1) if st['first_balls'] else 0 }}%)</span></td>
-    <td class="num">{{ st['spare_chances'] - st['spares'] }}<span class="mut"> ({{ pct(st['spare_chances'] - st['spares'], st['spare_chances']) | round(1) if st['spare_chances'] else 0 }}%)</span></td>
+    <td class="num">{% set mk = st.get('makable') %}{% set miss = (st['makable'] - st['makable_made']) if mk is not none else (st['spare_chances'] - st['spares']) %}{% set den = mk if mk is not none else st['spare_chances'] %}{{ miss }}<span class="mut">/{{ den }} ({{ pct(miss, den) | round(1) if den else 0 }}%)</span></td>
     <td class="num">{{ st['single_pin'] - st['single_pin_made'] }}<span class="mut">/{{ st['single_pin'] }} ({{ pct(st['single_pin'] - st['single_pin_made'], st['single_pin']) | round(1) if st['single_pin'] else 0 }}%)</span></td>
   </tr>
 {% endfor %}
@@ -41,8 +41,8 @@
     ({{ pct(s['st']['spares'], s['st']['spare_chances']) | round(0) | int }}%)</td>
   <td class="num mut">{{ s['st']['split_first'] }}
     ({{ pct(s['st']['split_first'], s['st']['first_balls']) | round(1) }}%)</td>
-  <td class="num mut">{{ s['st']['spare_chances'] - s['st']['spares'] }}
-    ({{ pct(s['st']['spare_chances'] - s['st']['spares'], s['st']['spare_chances']) | round(1) }}%)</td>
+  {% set mk = s['st'].get('makable') %}{% set miss = (s['st']['makable'] - s['st']['makable_made']) if mk is not none else (s['st']['spare_chances'] - s['st']['spares']) %}{% set den = mk if mk is not none else s['st']['spare_chances'] %}
+  <td class="num mut">{{ miss }} ({{ pct(miss, den) | round(1) if den else 0 }}%)</td>
   <td class="num mut">{{ s['st']['single_pin'] - s['st']['single_pin_made'] }}/{{ s['st']['single_pin'] }}
     ({{ pct(s['st']['single_pin'] - s['st']['single_pin_made'], s['st']['single_pin']) | round(1) }}%)</td>
 </tr></tfoot>

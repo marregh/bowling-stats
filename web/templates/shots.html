@@ -20,7 +20,7 @@
   <th class="num" data-col title="Snitt antal käglor på första klotet">1:a klot</th>
   <th class="num" data-col title="Sorterar på andel">Hål</th>
   <th class="num" data-col title="Andel hål som togs">Hål tagna</th>
-  <th class="num" data-col title="Andel av spärrlägena som missades">Spärr miss</th>
+  <th class="num" data-col title="Missade spärrar av de spärrlägen som inte var splits — splits har sin egen kolumn">Spärr miss</th>
   <th class="num" data-col title="Sorterar på andel">Enkel miss</th>
 </tr></thead>
 <tbody>
@@ -45,7 +45,8 @@
     <span class="mut">({{ p['split_pct'] | round(1) }}%)</span></td>
   <td class="num" data-v="{{ p['split_conv'] if p['split_conv'] is not none }}">
     {{- p['split_conv'] | round(0) | int if p['split_conv'] is not none else '–' -}}%</td>
-  <td class="num" data-v="{{ p['open_pct'] }}">{{ p['open_pct'] | round(1) }}%</td>
+  <td class="num" data-v="{{ p.get('missed_spare_pct', 0) }}">{{ p.get('missed_spare', 0) }}<span class="mut">/{{ p.get('spare_makable', 0) }}
+      ({{ p.get('missed_spare_pct', 0) | round(1) }}%)</span></td>
   <td class="num" data-v="{{ p['missed_single_pct'] }}">{{ p['missed_single'] }}<span class="mut">/{{ p['single_chances'] }}
       ({{ p['missed_single_pct'] | round(1) }}%)</span></td>
 </tr>

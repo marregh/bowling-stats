@@ -953,6 +953,14 @@ def shots():
                     "covered": v["frames"] - v["opens"],
                    "covered_pct": pct(v["frames"] - v["opens"], v["frames"]) or 0,
                    "open_pct": pct(v["opens"], v["spare_chances"]) or 0,
+                   # "Spärr miss" counts only leaves that were there to be made.
+                   # Splits have their own column and their own conversion rate;
+                   # counting them here too charged a player twice for one bad
+                   # first ball.
+                   "missed_spare": v["makable"] - v["makable_made"],
+                   "spare_makable": v["makable"],
+                   "missed_spare_pct": pct(v["makable"] - v["makable_made"],
+                                           v["makable"]) or 0,
                    # a single-pin leave is a first ball of 9: one pin standing
                    "missed_single": v["single_pin"] - v["single_pin_made"],
                    "missed_single_pct": pct(v["single_pin"] - v["single_pin_made"],

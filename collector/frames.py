@@ -27,6 +27,7 @@ def stats(balls):
     # the honest denominator for a conversion rate.
     s = dict(frames=0, strikes=0, spares=0, opens=0, misses=0, splits=0,
              split_first=0, split_converted=0, spare_chances=0,
+             makable=0, makable_made=0,
              single_pin=0, single_pin_made=0, first_ball_pins=0, first_balls=0)
     for fr in split_frames(balls):
         if not fr:
@@ -57,6 +58,17 @@ def stats(balls):
         # a spare chance is any frame whose first ball left pins standing
         if fr and fr[0]["ball"] != "X":
             s["spare_chances"] += 1
+            # ...and a *makable* one is a spare chance that is not a split.
+            # Lumping missed splits in with missed spares reads as sloppiness
+            # at the line when it is usually just a bad first ball, and it
+            # punishes the player twice: the split is already its own column,
+            # with its own conversion rate. Splits are hard by definition, so
+            # the honest question for the spare game is what happened to the
+            # leaves that were there to be made.
+            if not fr[0]["split"]:
+                s["makable"] += 1
+                if len(fr) > 1 and fr[1]["ball"] == "/":
+                    s["makable_made"] += 1
             if _num(fr[0]["ball"]) == 9:
                 s["single_pin"] += 1
             if len(fr) > 1 and fr[1]["ball"] not in ("/",):
