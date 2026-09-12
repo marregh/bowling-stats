@@ -205,6 +205,14 @@ exactly why the test builds the sequence instead of waiting for it.
 Also per rack now, having silently ignored the tenth: single-pin chances (`X 9 /`
 converted a single pin and counted nothing), split rate, and first-ball average.
 
+And the other half of the tenth frame: **a rack with no second ball is not a
+chance.** The last ball of `9 / 9` and of `X X 9` is a bonus throw. It leaves a
+single pin standing and the bowler never gets to shoot at it, so counting it as
+a spare chance invented misses that appear on no scoresheet -- 239 of them
+across 132 players before this was caught, which is how a player noticing two
+phantom single-pin misses of his own found a fault in every game with that
+shape.
+
 `spares`, `strikes`, `misses`, `splits` and `frames` keep their per-ball
 meanings on purpose -- `verify()` checks those against Bowlit's own published
 aggregates, so redefining them would break the one external check there is.

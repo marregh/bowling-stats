@@ -91,14 +91,18 @@ def stats(balls):
             s["first_ball_pins"] += 10 if tok0 == "X" else (0 if tok0 in "-/" else _num(tok0))
             if b0["split"]:
                 s["split_racks"] += 1
+            if tok0 == "X" or len(rk) < 2:
+                # Either nothing was left, or nothing could be done about what
+                # was: the last ball of "9 / 9" and of "X X 9" is a bonus throw
+                # with no follow-up. It leaves a single pin standing and the
+                # bowler never gets to shoot at it, so counting it as a spare
+                # chance invented misses that are not on the scoresheet.
+                continue
+            made = rk[1]["ball"] == "/"
             if _num(tok0) == 9:
                 # a single pin standing: the most makable leave there is
                 s["single_pin"] += 1
-                if len(rk) > 1 and rk[1]["ball"] == "/":
-                    s["single_pin_made"] += 1
-            if tok0 == "X" or len(rk) < 2:
-                continue
-            made = rk[1]["ball"] == "/"
+                s["single_pin_made"] += made
             if b0["split"]:
                 s["split_tries"] += 1
                 s["split_made"] += made

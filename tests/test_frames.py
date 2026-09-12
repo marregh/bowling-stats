@@ -28,9 +28,12 @@ CASES = {
         "X X X X X X X X X X X X",
         dict(strikes=12, racks=12, makable=0, spares=0)),
     "alla spärrar plus bonusklot": (
+        # ten single pins left and all ten cleared. The eleventh 9 is the bonus
+        # ball earned by the tenth-frame spare: it leaves a pin, but there is no
+        # ball left to clear it with, so it is not a chance and not a miss.
         "9 / 9 / 9 / 9 / 9 / 9 / 9 / 9 / 9 / 9 / 9",
         dict(spares=10, makable=10, makable_made=10,
-             single_pin=11, single_pin_made=10)),
+             single_pin=10, single_pin_made=10)),
     "tionde X X 8: sista klotet är varken spärr eller miss": (
         "8 1 8 1 8 1 8 1 8 1 8 1 8 1 8 1 8 1 X X 8",
         dict(strikes=2, racks=12, makable=9, makable_made=0)),
@@ -40,12 +43,21 @@ CASES = {
     "split som räddas räknas inte som maklig": (
         "7* / 8 1 8 1 8 1 8 1 8 1 8 1 8 1 8 1 8 1",
         dict(split_tries=1, split_made=1, makable=9, spares=1)),
+    "tionde 9 / 9: bonusklotet är inget spärrläge": (
+        "8 1 8 1 8 1 8 1 8 1 8 1 8 1 8 1 8 1 9 / 9",
+        dict(spares=1, makable=10, makable_made=1,
+             single_pin=1, single_pin_made=1)),
+    "tionde X X 9: bonusklotet är inget spärrläge": (
+        "8 1 8 1 8 1 8 1 8 1 8 1 8 1 8 1 8 1 X X 9",
+        dict(strikes=2, single_pin=0, single_pin_made=0, makable=9)),
     "öppen tionde": (
         "X X X X X X X X X 9 -",
         dict(strikes=9, racks=10, makable=1, makable_made=0)),
 }
 
 INVARIANTS = {
+    "enkel-lägen har alltid ett klot till att lösas med":
+        lambda v: v["single_pin"] <= v["makable"] + v["split_tries"],
     "gjorda + split_gjorda == spärrar":
         lambda v: v["makable_made"] + v["split_made"] == v["spares"],
     "strikes <= rutor":
