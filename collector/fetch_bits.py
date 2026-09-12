@@ -25,11 +25,25 @@ def sync_season(con, api, season, verbose=True):
                :home_id,:home,:away_id,:away,:home_score,:away_score,
                :home_pts,:away_pts,:hall_id,:hall,:city,:oil,:scheme,:played,
                :first_seen)
+            -- This table is a mirror, so everything BITS can change is taken
+            -- from BITS every run. It used to refresh only the scores, which
+            -- meant a fixture kept whatever it said the first time we ever saw
+            -- it: a match entered months ahead sat there as "Ingen OljeProfil"
+            -- long after the oil pattern was set, and a moved venue or renamed
+            -- team would have stuck in exactly the same way.
             ON CONFLICT(match_id) DO UPDATE SET
+              season=excluded.season, division_id=excluded.division_id,
+              division=excluded.division, league=excluded.league,
+              round_id=excluded.round_id, played_at=excluded.played_at,
+              home_id=excluded.home_id, home=excluded.home,
+              away_id=excluded.away_id, away=excluded.away,
               home_score=excluded.home_score, away_score=excluded.away_score,
               home_pts=excluded.home_pts, away_pts=excluded.away_pts,
-              played_at=excluded.played_at, has_been_played=excluded.has_been_played,
-              -- stamped once, the first time BITS admits the match was played
+              hall_id=excluded.hall_id, hall=excluded.hall, city=excluded.city,
+              oil_pattern=excluded.oil_pattern, scheme_id=excluded.scheme_id,
+              has_been_played=excluded.has_been_played,
+              -- the one column that is ours, not BITS's: stamped once, the
+              -- first time BITS admitted the match was played
               first_seen_played=COALESCE(bits_match.first_seen_played,
                                          excluded.first_seen_played)
         """, dict(
