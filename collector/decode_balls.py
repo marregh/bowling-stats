@@ -10,8 +10,8 @@ accepted only if scoring it reproduces them. That is the same rule sheet.py
 applied to the old scoresheet decoder: a decode that cannot reproduce the
 printed arithmetic is wrong, whatever it looks like.
 
-Tokens are "X", "/", "-", a digit, or "sN" for a digit inside the circle that
-marks a split.
+Tokens are "X", "/", "-", "F" for a foul, a digit, or "sN" for a digit inside
+the circle that marks a split. A foul scores nothing, like a miss.
 """
 import numpy as np
 from PIL import Image
@@ -19,7 +19,13 @@ from PIL import Image
 import board
 
 NW, NH = 10, 14
-MAX_DIST = 2.2
+# Loose on purpose. The nearest template is usually the right glyph even when
+# it sits well past a tight cutoff -- an orange Klippan "5" lands 2.7 away from
+# a blue Baltiska one -- and a wrong guess does not survive scoring the frames
+# against the printed totals. Refusing to read costs a whole row; guessing
+# wrong costs nothing, because the validator throws it out.
+MAX_DIST = 3.2
+MAX_FRAME_SCORE = 30    # above this, a first total must carry a handicap
 
 
 def load_templates(path=None):
@@ -68,8 +74,8 @@ def pins(tok, before=0):
         return 10
     if tok == "/":
         return 10 - before
-    if tok == "-":
-        return 0
+    if tok in ("-", "F"):
+        return 0            # a miss and a foul both leave the rack untouched
     t = tok[1:] if tok.startswith("s") else tok
     return int(t) if t.isdigit() else None
 
@@ -148,7 +154,18 @@ def agrees(frames, printed, handicap=0):
 
 
 def infer_handicap(frames, printed):
-    """The constant that makes the decoded frames match the printed totals."""
+    """The constant that makes the decoded frames match the printed totals.
+
+    Only where the board actually plays off handicap, which it announces by
+    opening above a legal frame score: a first total of 102 is 74 of handicap
+    plus 28 bowled, while a first total of 19 is just a good frame. Allowing a
+    free constant everywhere was letting a systematically misread card "agree"
+    at an offset of 39 in a league that has no handicap at all -- the offset
+    absorbed the error instead of exposing it.
+    """
+    first = next((t for t in printed if t is not None), None)
+    if first is None or first <= MAX_FRAME_SCORE:
+        return 0
     mine = score(frames)
     diffs = {b - a for a, b in zip(mine, printed) if a is not None and b is not None}
     return diffs.pop() if len(diffs) == 1 else None

@@ -243,10 +243,32 @@ agreement**, and the handicap it infers from the mismatch is 77, which is that
 player's actual handicap in BITS. Splits come through: `s8` on lane 5 is the
 circled 8 that is plainly there on the board.
 
-The other three boards produce the right tokens but stall on a few glyphs the
-template set does not cover yet, and one unread ball breaks the running total
-from there on. Two gaps are known: the ball font has digit shapes the totals
-font does not, and a foul prints as `F`, which has no template at all.
+**All four of the U team's boards now decode completely**, every frame verified
+against the printed totals, with the handicap each board carries recovered from
+the pixels and matching BITS:
+
+```
+Sixten Bengtsson  109  X X 8- 9- s81 36 61 35 81 4F   hcp 74
+Edvin Josefsson   146  7- X X 9- X -8 8/ X 72 71      hcp 77
+Liam Johansson    105  71 63 6/ 62 62 72 -7 9- 3/ 5/6 hcp 77
+Erik Landgren     106  8- 9/ 1/ 9- 9- 9- 53 34 -9 9/7 hcp 77
+```
+
+Baltiska is weaker -- 4 of 16 cards on the boards tried -- because most of its
+ball templates come from one hall and one evening. More cards, not more code.
+
+Two things that make or break it:
+
+- **The distance threshold is deliberately loose (3.2).** An orange Klippan "5"
+  sits 2.7 from a blue Baltiska one, so a tight cutoff refuses to read a glyph
+  it has correctly identified, and one unread ball costs the whole row. Guessing
+  wrong costs nothing, because scoring the frames against the printed totals
+  throws it out. The validator is what buys the looseness.
+- **A handicap offset is only allowed where the board shows one**, which it
+  announces by opening above a legal frame score -- a first total of 102 is 74
+  of handicap plus 28 bowled. Allowing a free constant everywhere let a
+  systematically misread card "agree" at an offset of 39 in a league that has no
+  handicap: the offset absorbed the error instead of exposing it.
 
 Two things cost real time and are worth not rediscovering:
 
