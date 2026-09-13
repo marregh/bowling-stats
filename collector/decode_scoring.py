@@ -34,6 +34,7 @@ import numpy as np
 from collections import Counter
 from PIL import Image
 
+import board                                                  # noqa: E402
 from store import connect
 
 HERE = Path(__file__).resolve().parent
@@ -213,13 +214,31 @@ def main():
     rows = con.execute(q, args).fetchall()[: a.limit]
 
     if a.stitch:
-        by_lane = {}
+        # Which layout the board is drawn in is decided per lane, not per
+        # image: one board is a poor witness early in a game, but a session of
+        # them is decisive. See board.pick_layout_for_series.
+        raw = {}
         for r in rows:
-            im = Image.open(io.BytesIO(r["png"]))
-            by_lane.setdefault(r["lane"], []).append((r["ts"], read_totals(im, V, labels)))
+            raw.setdefault(r["lane"], []).append((r["ts"], Image.open(io.BytesIO(r["png"]))))
+
+        def one_row(im, band):
+            return [read_cell(im, "p1", f, V, labels, {"p1": band}) for f in range(10)]
+
+        by_lane = {}
+        for lane, seq in raw.items():
+            name, scores = board.pick_layout_for_series([im for _, im in seq], one_row)
+            if not name:
+                print(f"  bana {lane}: ingen layout kunde avgoras ({scores})")
+                continue
+            cards = board.LAYOUTS[name]
+            print(f"  bana {lane}: layout {name}")
+            for ts, im in seq:
+                t = {f"p{i+1}": one_row(im, band)
+                     for i, (_, band) in enumerate(cards)}
+                by_lane.setdefault(lane, []).append((ts, t))
         whole = part = 0
         for lane, seq in sorted(by_lane.items()):
-            for who in BANDS:
+            for who in sorted(seq[0][1]):
                 for gi, g in enumerate(split_games(seq, who), 1):
                     merged = stitch(g)
                     ok, frames, why = check(merged)

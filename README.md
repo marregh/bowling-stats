@@ -167,6 +167,20 @@ Recall is the weak half, and the reasons are known rather than mysterious:
 - **game segmentation** currently starts a new game when frame 1's total drops,
   which one misread of "20" as "0" also does. The board prints "Serie 3" in its
   top corner; reading that is the honest fix and needs its own templates.
+
+**Which layout the board is drawn in is now worked out automatically**, per lane
+rather than per image. There are three so far and they do not follow the hall:
+Klippan draws one card for a single bowler and two for a 2v2 pair, so the rows
+move with the scoring mode. Detecting them from pixels was tried four ways --
+the horizontal rules, the light cells, the frame separators, and decoding under
+each layout -- and all four worked on some boards and not others.
+
+What does work is decoding under each layout and adding the scores over a whole
+lane's session: a wrong geometry can scrape a plausible row out of the furniture
+once, but not consistently. On twelve lanes across two halls the right layout
+won every time and the wrong ones scored exactly zero. A single board early in a
+game still cannot be told apart -- too few cells are filled -- which is why the
+decision is made per session.
 - **the capture window.** The first run stopped during game 3 of 4.
 
 Two geometry facts that cost real debugging: the horizontal rules at y = 71, 90,

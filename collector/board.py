@@ -78,3 +78,63 @@ def glyphs(cell, dark=140):
             continue
         out.append(g.crop((s, min(ys), e, max(ys) + 1)))
     return out
+
+
+def score_layout(im, cards, read_totals_row, min_cells=5):
+    """How well one layout explains this board.
+
+    Counts cells that decode *and* sit in a sequence that climbs by legal frame
+    scores. A wrong geometry can scrape two or three cells out of the header by
+    luck, so a layout has to clear `min_cells` on a single card before it counts
+    at all -- luck does not produce five totals in a row that behave like a game.
+    """
+    total = 0
+    for _, band in cards:
+        vals = read_totals_row(im, band)
+        seen = [v for v in vals if v is not None]
+        if len(seen) < min_cells:
+            continue
+        prev, ok = 0, True
+        for n, v in enumerate(seen):
+            step = v - prev
+            if step < 0 or step > (180 if n == 0 else 30):
+                ok = False
+                break
+            prev = v
+        if ok and seen[-1] >= 30:
+            total += len(seen)
+    return total
+
+
+def pick_layout(im, read_totals_row):
+    """The layout that best explains this board, or (None, 0).
+
+    The board is drawn differently per hall *and* per scoring mode -- one card
+    for a single bowler, two for a 2v2 pair -- so this cannot be looked up from
+    the hall alone. Rather than detect the rows from pixels, which was tried
+    four ways and worked on some boards and not others, each known layout is
+    decoded and the one whose numbers behave like a bowling game wins.
+    """
+    best, best_score = None, 0
+    for name, cards in LAYOUTS.items():
+        s = score_layout(im, cards, read_totals_row)
+        if s > best_score:
+            best, best_score = name, s
+    return best, best_score
+
+
+def pick_layout_for_series(images, read_totals_row):
+    """The layout for a run of boards from one lane, summed over all of them.
+
+    A single board is a poor witness: early in a game too few cells are filled
+    to tell the layouts apart, and now and then a wrong geometry scrapes a
+    plausible-looking row out of the furniture. Neither happens *consistently*,
+    and a lane is always captured many times, so the scores are added up and the
+    layout that explains the whole session wins.
+    """
+    totals = {name: 0 for name in LAYOUTS}
+    for im in images:
+        for name, cards in LAYOUTS.items():
+            totals[name] += score_layout(im, cards, read_totals_row)
+    best = max(totals, key=totals.get)
+    return (best, totals) if totals[best] else (None, totals)
