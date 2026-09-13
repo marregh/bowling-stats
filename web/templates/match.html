@@ -20,7 +20,7 @@
     <td class="mut">{{ loop.index }}</td>
     <td><a href="{{ B }}/player/{{ p['lic'] }}{{ qargs() }}">{{ p['player'] }}</a></td>
     {% for g in p['games'] %}
-      <td class="num {% if g and g >= 200 %}w{% endif %}">{{ g or '–' }}</td>
+      <td class="num {% if g and g >= target %}w{% endif %}">{{ g or '–' }}</td>
     {% endfor %}
     <td class="num">{{ p['series'] }}</td>
     <td class="num mut">{{ p['avg'] | round(1) if p['avg'] is not none else '–' }}</td>

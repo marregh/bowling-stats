@@ -279,6 +279,46 @@ Two things cost real time and are worth not rediscovering:
   anything under four pixels high, so every `-` vanished and `8 -` became `8`
   with an empty box, quietly turning an open frame into an unfinished one.
 
+### Capturing and decoding without being asked
+
+Nothing about a scoring.se hall needs arranging by hand any more.
+
+```
+python collector/plan_captures.py --days 8 --human   # what would be captured
+.\plan_captures.ps1 -Days 8                          # register the tasks
+python collector/ingest_scoring.py --auto            # decode whatever is waiting
+```
+
+`collect.ps1` runs the ingest every pass and the planner once each morning, so
+the sequence per fixture is: the planner sees a match at a hall we can reach and
+registers a capture task with the right lanes and window; the task photographs
+the boards while it is played; BITS publishes the protocol; the next collector
+pass decodes the boards, attributes each card and writes the frames; the Discord
+post then links to a page that already has the shot statistics on it.
+
+Everything it needs is already in the mirror: the fixture gives the hall,
+`board.ALLEYS` says whether scoring.se covers it, BITS gives the lane group, and
+a four-game match runs about three hours. Where BITS has no lane group the whole
+hall is captured instead -- a wrong guess costs the entire match and the extra
+images cost nothing.
+
+**It cannot invent data.** A game is written only if scoring its decoded balls
+reproduces every printed total on the board, and a card is attributed only when
+the score *and* the handicap both match what BITS publishes for that player.
+The failure mode is a gap, never a wrong name on a real score.
+
+What still needs a person:
+
+- **A new hall decodes badly at first.** The ball templates are per skin, and
+  Klippan manages 8 of 16 player-games where Baltiska manages 4 of 16, purely
+  because one has more examples than the other. It improves as captures pile up,
+  but a hall we have never seen will want its glyphs harvested and labelled.
+- **A fourth board layout** would fail cleanly -- the layout picker reports that
+  it cannot decide, rather than guessing -- but someone has to measure it.
+- **The capture tasks run only while you are logged in.** `LogonType` is
+  `Interactive` and changing it needs one elevated command. Automation that
+  silently does not run is worse than none.
+
 ### The old live-scoring route (superseded)
 
 `POST https://livescoring.bowlit.nu/api/getlanes`, body `Slug=lunds-bowling`,

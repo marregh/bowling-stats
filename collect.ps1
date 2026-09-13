@@ -44,8 +44,13 @@ $failed = 0
 foreach ($step in @(
     @{ name = 'fetch_bits';   args = @("collector\fetch_bits.py")   + $Seasons },
     @{ name = 'fetch_social'; args = @("collector\fetch_social.py") + ($Seasons | ForEach-Object { '--season'; $_ }) },
-    # Last, so a match is only announced once its results -- and, where the
-    # alley runs Bowlit, its frame data -- are actually in the database.
+    # Frames decoded off scoring.se boards, for the halls Bowlit never reaches.
+    # After fetch_bits, because attributing a card to a player needs the scores
+    # and handicaps BITS publishes; before notify, so a match is announced with
+    # its shot statistics already on the page.
+    @{ name = 'ingest_scoring'; args = @("collector\ingest_scoring.py", "--auto", "--write") },
+    # Last, so a match is only announced once its results -- and its frame data,
+    # from whichever source covers the hall -- are actually in the database.
     @{ name = 'notify_new';   args = @("collector\notify_new.py") }
 )) {
     if ($Refetch -and $step.name -eq 'fetch_social') { $step.args += '--refetch' }
@@ -59,6 +64,12 @@ foreach ($step in @(
         Write-Log "$($step.name) MISSLYCKADES (exit $code)"
         $failed++
     }
+}
+
+# Looking a week ahead once a day is plenty; the 08:00 run does it.
+if ((Get-Date).Hour -lt 10) {
+    Write-Log "plan_captures ..."
+    & "$here\plan_captures.ps1" -Days 8 | Out-Null
 }
 
 Write-Log "--- collect klar, $failed steg misslyckades ---"

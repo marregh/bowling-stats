@@ -21,6 +21,25 @@ except the tenth, which is half as wide again -- three ball boxes, not two --
 and runs to the table edge at 351.
 """
 
+# Halls whose boards we can photograph off scoring.se, by the alley id that
+# site uses. Bowlit is the better source where it reaches; this covers the rest.
+ALLEYS = {
+    "Malmö - Baltiska": 524,
+    "Klippan Bowlinghall": 497,
+    "Eslövs Bowlinghall": 443,
+    "Trelleborg - Söderslätt": 661,
+    "Nässjö Bowlinghall": 645,
+    "Höganäs Bowlinghall": 478,
+    "Göteborg - Strike o Co": 637,
+    "Eds Bowlinghall": 438,
+}
+
+# A four-game league match runs about this long. The BITS schedule implies less
+# -- it puts the next match on the same lane group 1h40m later -- but the first
+# capture stopped during game 3 of 4 going by that.
+MATCH_HOURS = 3.0
+LEAD_MINUTES = 10          # start before the throw-off, to catch the warm-up ending
+
 X0, W = 8.3, 32.66
 RIGHT_EDGE = 351
 

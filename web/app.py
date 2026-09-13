@@ -11,6 +11,7 @@ from flask import Flask, Response, render_template, request, abort, send_file
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "collector"))
 from store import connect          # noqa: E402
 from bits import TEAMS             # noqa: E402
+from board import ALLEYS as SCORING_ALLEYS   # noqa: E402
 import frames                      # noqa: E402
 import json, os, re, time, unicodedata  # noqa: E402
 import xlsx  # noqa: E402
@@ -298,6 +299,18 @@ TEAM_TARGET = {162098: 100,      # U
 
 def team_target(team_id):
     return TEAM_TARGET.get(team_id, DEFAULT_TARGET)
+
+
+@app.template_global("pari")
+def pari(team_id):
+    """The score a game has to beat for this team. Not one number for the club.
+
+    Pari is set per division, so the U team's 100 and the B team's 160 are as
+    real as the A team's 200. Templates used to compare against a literal 200,
+    which quietly meant only the teams whose target happens to be 200 ever lit
+    up green.
+    """
+    return team_target(team_id)
 
 
 @app.template_filter("team")
@@ -610,20 +623,6 @@ def match_frame_map(con, bits_names, social_names):
     return out
 
 
-# Halls we can photograph off scoring.se, by the alley id that site uses.
-# Bowlit is the better source where it reaches; this is what covers the rest.
-SCORING_ALLEYS = {
-    "Malmö - Baltiska": 524,
-    "Klippan Bowlinghall": 497,
-    "Eslövs Bowlinghall": 443,
-    "Trelleborg - Söderslätt": 661,
-    "Nässjö Bowlinghall": 645,
-    "Höganäs Bowlinghall": 478,
-    "Göteborg - Strike o Co": 637,
-    "Eds Bowlinghall": 438,
-}
-
-
 def match_data(match_id):
     """One played league match: the BITS scoresheet, plus Bowlit frame stats
     for the players we can line up, when the hall was covered at all."""
@@ -688,7 +687,9 @@ def match_data(match_id):
                WHERE slug = ? AND substr(ts, 1, 10) = ?""",
             (f"scoring:{alley}", (m["played_at"] or "")[:10])).fetchone()[0]
 
+    ours = m["home_id"] if m["home_id"] in TEAM_TARGET else m["away_id"]
     return {"m": m, "sides": sides, "season": m["season"], "boards": boards,
+            "target": team_target(ours),
             "has_frames": any(s["covered"] for s in sides)}
 
 
@@ -723,6 +724,7 @@ def player_data(lic):
         SELECT m.played_at, m.round_id, m.division, m.hall, m.oil_pattern,
                CASE WHEN r.side='H' THEN m.away ELSE m.home END opponent,
                CASE WHEN r.side='H' THEN m.home ELSE m.away END own,
+               CASE WHEN r.side='H' THEN m.home_id ELSE m.away_id END own_id,
                r.g1, r.g2, r.g3, r.g4, r.series, r.hcp, r.total, r.lane_point, r.place
         FROM bits_result r JOIN bits_match m ON m.match_id = r.match_id
         WHERE r.lic = ? AND m.season = ?

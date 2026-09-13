@@ -107,7 +107,7 @@
     <td class="us">{{ h['own'] | team }}</td>
     <td>{{ h['opponent'] | team }}</td>
     {% for g in [h['g1'], h['g2'], h['g3'], h['g4']] %}
-      <td class="num {% if g and g >= 200 %}w{% endif %}">{{ g or '–' }}</td>
+      <td class="num {% if g and g >= pari(h['own_id']) %}w{% endif %}">{{ g or '–' }}</td>
     {% endfor %}
     <td class="num">{{ h['series'] }}</td>
     <td class="num mut">{{ gs and (gs | sum / gs | length) | round(1) or '–' }}</td>

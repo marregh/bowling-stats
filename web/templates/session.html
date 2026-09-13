@@ -18,7 +18,9 @@
     <td {% if p['club'] %}class="us"{% endif %}>{{ p['player'] }}</td>
     {% for g in range(1, n_games + 1) %}
       {% set gm = (p['games'] | selectattr('game', 'equalto', g) | list | first) %}
-      <td class="num {% if gm and gm['score'] and gm['score'] >= 200 %}w{% endif %}">
+      {# a practice session belongs to no division, so there is no pari for it:
+   pari(none) is the club default rather than any team's own target #}
+<td class="num {% if gm and gm['score'] and gm['score'] >= pari(none) %}w{% endif %}">
         {{ gm['score'] if gm else '–' }}</td>
     {% endfor %}
     <td class="num">{{ p['pins'] }}</td>
