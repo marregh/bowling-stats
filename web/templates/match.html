@@ -87,7 +87,10 @@
 
 {% if not has_frames %}
 <div class="panel"><div class="note">Ingen slagdata för den här matchen &mdash;
-  Bowlit täcker bara en del av hallarna. Nedan är BITS egna siffror.</div></div>
+  Bowlit täcker bara en del av hallarna. Nedan är BITS egna siffror.
+  {% if boards %}<br>Däremot finns <b>{{ boards }}</b> sparade bilder av
+  hallens egna tavlor från den dagen. Ramarna går inte att läsa ur dem ännu,
+  men bilderna ligger kvar.{% endif %}</div></div>
 {% endif %}
 
 {% for s in sides %}

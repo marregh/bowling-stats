@@ -19,6 +19,7 @@ logs/
 
 # Generated exports
 *.xlsx
+export/
 
 # Secrets. The BITS collector no longer needs a key, but .env now holds the
 # Discord webhook URL, which is a credential: anyone with it can post.

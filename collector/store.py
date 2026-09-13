@@ -114,6 +114,17 @@ CREATE TABLE IF NOT EXISTS notified (
     ts       TEXT,
     PRIMARY KEY (match_id, kind)
 );
+CREATE TABLE IF NOT EXISTS hidden (
+    -- Things the site should not show for now, without deleting anything.
+    -- A walkover, a protocol BITS has entered wrongly, a team that turns out
+    -- not to be what its name suggests: all reasons to hide a row rather than
+    -- lose it. Delete the row to unhide.
+    kind   TEXT NOT NULL,          -- 'match' or 'team'
+    ref    TEXT NOT NULL,          -- match_id, or team_id
+    reason TEXT,
+    ts     TEXT,
+    PRIMARY KEY (kind, ref)
+);
 CREATE TABLE IF NOT EXISTS bits_standing (
     season INTEGER, division_id INTEGER, team_id INTEGER, team TEXT,
     matches INTEGER, win INTEGER, draw INTEGER, loss INTEGER,

@@ -53,6 +53,7 @@ NW, NH = 8, 15
 DARK = 115
 MAX_DIST = 2.6          # beyond this, call it unreadable
 MAX_FRAME = 30          # a frame cannot score more than a strike plus two more
+MAX_HANDICAP = 150      # added into the first total where the league uses it
 RIGHT_EDGE = 351        # where the scoring table ends
 
 
@@ -131,12 +132,17 @@ def check(totals):
     if not seen:
         return False, [], "tom"
     frames, prev = [], 0
-    for i, t in seen:
+    for n, (i, t) in enumerate(seen):
         step = t - prev
         if step < 0:
             return False, [], f"ram {i + 1}: summan sjunker, {prev} -> {t}"
-        if step > MAX_FRAME:
-            return False, [], f"ram {i + 1}: steg {step} > {MAX_FRAME}"
+        # The first total carries any handicap: the youth league adds it up
+        # front, so Sixten Bengtsson's game reads 102 after one frame -- 74 of
+        # handicap plus 28 bowled. Every later step is a frame and must be a
+        # legal frame score, which still checks nine of the ten.
+        limit = MAX_FRAME + MAX_HANDICAP if n == 0 else MAX_FRAME
+        if step > limit:
+            return False, [], f"ram {i + 1}: steg {step} > {limit}"
         frames.append(step)
         prev = t
     return True, frames, ""

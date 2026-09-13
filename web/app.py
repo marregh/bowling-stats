@@ -170,6 +170,16 @@ def reload_stream():
                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
+def hidden(kind):
+    """Rows the site should not show, by kind. See the `hidden` table.
+
+    Nothing is deleted: a walkover, a protocol BITS has entered wrongly or a
+    team that is not what its name suggests all want hiding rather than losing.
+    Removing the row brings it straight back.
+    """
+    return {str(r["ref"]) for r in q("SELECT ref FROM hidden WHERE kind = ?", kind)}
+
+
 def q(sql, *args):
     return connect().execute(sql, args).fetchall()
 
@@ -338,18 +348,23 @@ def index():
         WHERE t.season = ? AND t.team LIKE ?
         ORDER BY t.division_id
     """, s, CLUB)
+    skip_team = hidden("team")
+    rows = [r for r in rows if str(r["team_id"]) not in skip_team]
+    skip_match = hidden("match")
     recent = q("""
         SELECT * FROM bits_match
         WHERE season = ? AND has_been_played = 1
           AND (home LIKE ? OR away LIKE ?)
-        ORDER BY played_at DESC LIMIT 8
+        ORDER BY played_at DESC LIMIT 12
     """, s, CLUB, CLUB)
+    recent = [r for r in recent if str(r["match_id"]) not in skip_match][:8]
     upcoming = q("""
         SELECT * FROM bits_match
         WHERE season = ? AND has_been_played = 0
           AND (home LIKE ? OR away LIKE ?)
-        ORDER BY played_at LIMIT 8
+        ORDER BY played_at LIMIT 12
     """, s, CLUB, CLUB)
+    upcoming = [r for r in upcoming if str(r["match_id"]) not in skip_match][:8]
     caps = q("""SELECT COUNT(*) n, COUNT(DISTINCT book_id) books,
                        MIN(ts) first_ts, MAX(ts) last_ts FROM capture""")[0]
     sessions = q("""
@@ -374,6 +389,7 @@ def team_data(team_id):
         WHERE season = ? AND (home_id = ? OR away_id = ?)
         ORDER BY played_at
     """, s, team_id, team_id)
+    matches = [m for m in matches if str(m["match_id"]) not in hidden("match")]
     div = matches[0]["division_id"] if matches else None
     table = q("""SELECT * FROM bits_standing WHERE season = ? AND division_id = ?
                  ORDER BY points DESC, diff DESC""", s, div) if div else []
@@ -594,12 +610,28 @@ def match_frame_map(con, bits_names, social_names):
     return out
 
 
+# Halls we can photograph off scoring.se, by the alley id that site uses.
+# Bowlit is the better source where it reaches; this is what covers the rest.
+SCORING_ALLEYS = {
+    "Malmö - Baltiska": 524,
+    "Klippan Bowlinghall": 497,
+    "Eslövs Bowlinghall": 443,
+    "Trelleborg - Söderslätt": 661,
+    "Nässjö Bowlinghall": 645,
+    "Höganäs Bowlinghall": 478,
+    "Göteborg - Strike o Co": 637,
+    "Eds Bowlinghall": 438,
+}
+
+
 def match_data(match_id):
     """One played league match: the BITS scoresheet, plus Bowlit frame stats
     for the players we can line up, when the hall was covered at all."""
     con = connect()
     m = con.execute("SELECT * FROM bits_match WHERE match_id = ?", (match_id,)).fetchone()
     if not m or not m["has_been_played"]:
+        abort(404)
+    if str(match_id) in hidden("match"):
         abort(404)
 
     results = con.execute("""SELECT * FROM bits_result WHERE match_id = ?
@@ -643,7 +675,20 @@ def match_data(match_id):
 
     sides = [build("H", m["home"], m["home_score"], m["home_pts"]),
              build("A", m["away"], m["away_score"], m["away_pts"])]
-    return {"m": m, "sides": sides, "season": m["season"],
+
+    # No frame data does not always mean nothing was recorded: where the hall
+    # is on scoring.se we photograph the boards, and those images are kept even
+    # though nothing reads the frames off them yet. Saying so beats implying
+    # the match went unobserved.
+    boards = 0
+    alley = SCORING_ALLEYS.get(m["hall"])
+    if alley:
+        boards = con.execute(
+            """SELECT COUNT(*) FROM capture
+               WHERE slug = ? AND substr(ts, 1, 10) = ?""",
+            (f"scoring:{alley}", (m["played_at"] or "")[:10])).fetchone()[0]
+
+    return {"m": m, "sides": sides, "season": m["season"], "boards": boards,
             "has_frames": any(s["covered"] for s in sides)}
 
 

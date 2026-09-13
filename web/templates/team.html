@@ -128,12 +128,12 @@
           tabindex="0" title="Visa matchdetaljer"{% endif %}>
     <td class="mut">{{ m['played_at'][:16].replace('T',' ') }}</td>
     <td class="num mut">{{ m['round_id'] }}</td>
-    <td>{{ (home and m['away'] or m['home']) | team }}</td>
+    <td>{{ (m['away'] if home else m['home']) | team }}</td>
     <td><span class="pill">{{ home and 'H' or 'B' }}</span></td>
     {% if m['has_been_played'] %}
-      {% set us = home and m['home_pts'] or m['away_pts'] %}
-      {% set them = home and m['away_pts'] or m['home_pts'] %}
-      <td class="num mut">{{ home and m['home_score'] or m['away_score'] }}–{{ home and m['away_score'] or m['home_score'] }}</td>
+      {% set us = m['home_pts'] if home else m['away_pts'] %}
+      {% set them = m['away_pts'] if home else m['home_pts'] %}
+      <td class="num mut">{{ m['home_score'] if home else m['away_score'] }}–{{ m['away_score'] if home else m['home_score'] }}</td>
       <td class="num">{{ us|round(0)|int }}–{{ them|round(0)|int }}</td>
     {% else %}
       <td class="num mut">–</td><td class="num mut">–</td>

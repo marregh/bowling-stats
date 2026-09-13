@@ -73,10 +73,23 @@ def sync_season(con, api, season, verbose=True):
     played = [m for m in matches if m["matchHasBeenPlayed"]]
     got = 0
     for m in played:
-        have = con.execute("SELECT 1 FROM bits_result WHERE match_id=? LIMIT 1",
+        # Having rows is not the same as having the right rows. A protocol can
+        # be registered incomplete and corrected later: match 3314110 sat with
+        # game 4 missing for all but one bowler, 3211-3314, until someone fixed
+        # it to 4368-4374. "Skip if we already have something" would have kept
+        # the wrong scoresheet forever, so the stored total has to agree with
+        # the match score before we leave it alone.
+        have = con.execute("""SELECT COUNT(*) n, COALESCE(SUM(total), 0) pins
+                              FROM bits_result WHERE match_id = ?""",
                            (m["matchId"],)).fetchone()
-        if have:
+        want = (m["matchHomeTeamScore"] or 0) + (m["matchAwayTeamScore"] or 0)
+        if have["n"] and (want == 0 or have["pins"] == want):
             continue
+        if have["n"]:
+            if verbose:
+                print(f"   {m['matchId']}: {have['pins']} kglor lagrade, BITS sager "
+                      f"{want} -- hamtar om", flush=True)
+            con.execute("DELETE FROM bits_result WHERE match_id = ?", (m["matchId"],))
         res = api.match_results(m["matchId"], m["matchSchemeId"]) or {}
         for side, key in (("H", "playerListHome"), ("A", "playerListAway")):
             for p in res.get(key) or []:
