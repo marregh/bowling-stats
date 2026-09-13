@@ -231,6 +231,32 @@ shape.
 meanings on purpose -- `verify()` checks those against Bowlit's own published
 aggregates, so redefining them would break the one external check there is.
 
+### Reading the ball row — works, not yet complete
+
+`collector/decode_balls.py` reads the frames themselves: strikes, spares,
+misses and the circled splits. It is checked the only honest way — scoring the
+decoded balls must reproduce the running totals printed under them, which are
+decoded separately. A reading that cannot is rejected rather than kept.
+
+On the U team's match at Klippan one board decodes **8 of 8 frames in
+agreement**, and the handicap it infers from the mismatch is 77, which is that
+player's actual handicap in BITS. Splits come through: `s8` on lane 5 is the
+circled 8 that is plainly there on the board.
+
+The other three boards produce the right tokens but stall on a few glyphs the
+template set does not cover yet, and one unread ball breaks the running total
+from there on. Two gaps are known: the ball font has digit shapes the totals
+font does not, and a foul prints as `F`, which has no template at all.
+
+Two things cost real time and are worth not rediscovering:
+
+- **An empty box is not an unreadable one.** A strike frame has no second ball.
+  Treating "nothing here" as "could not read" made every strike look like a
+  failure and threw the frame away.
+- **A miss is a dash, two or three pixels tall.** The glyph splitter discarded
+  anything under four pixels high, so every `-` vanished and `8 -` became `8`
+  with an empty box, quietly turning an open frame into an unfinished one.
+
 ### The old live-scoring route (superseded)
 
 `POST https://livescoring.bowlit.nu/api/getlanes`, body `Slug=lunds-bowling`,

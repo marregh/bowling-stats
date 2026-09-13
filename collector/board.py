@@ -74,7 +74,12 @@ def glyphs(cell, dark=140):
     out = []
     for s, e in runs:
         ys = [y for y in range(h) if any(px[x, y] < dark for x in range(s, e))]
-        if not ys or max(ys) - min(ys) < 4 or e - s < 2:
+        tall = max(ys) - min(ys)
+        # A miss is a dash: two or three pixels tall and quite wide. Filtering
+        # on height alone threw every one of them away, which made a frame like
+        # "8 -" look like "8" with an empty second box and quietly changed an
+        # open frame into an unfinished one.
+        if e - s < 2 or (tall < 4 and not (e - s >= 4 and tall >= 1)):
             continue
         out.append(g.crop((s, min(ys), e, max(ys) + 1)))
     return out
