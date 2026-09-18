@@ -125,6 +125,20 @@ CREATE TABLE IF NOT EXISTS hidden (
     ts     TEXT,
     PRIMARY KEY (kind, ref)
 );
+CREATE TABLE IF NOT EXISTS capture_raw (
+    -- Whatever a live-scoring source hands us that is not an image: JSON from
+    -- an API, mostly. Kept verbatim, because the point of recording during a
+    -- match is that it cannot be done afterwards -- working out what the
+    -- fields mean can wait, having the bytes cannot.
+    id     INTEGER PRIMARY KEY,
+    ts     TEXT NOT NULL,
+    source TEXT NOT NULL,          -- 'falkenberg', 'lanetalk:<uuid>', ...
+    kind   TEXT,                   -- 'live', 'leaderboard', ...
+    sha    TEXT NOT NULL,
+    body   TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS capture_raw_uq ON capture_raw(source, kind, sha);
+CREATE INDEX IF NOT EXISTS capture_raw_ts ON capture_raw(ts);
 CREATE TABLE IF NOT EXISTS bits_standing (
     season INTEGER, division_id INTEGER, team_id INTEGER, team TEXT,
     matches INTEGER, win INTEGER, draw INTEGER, loss INTEGER,
