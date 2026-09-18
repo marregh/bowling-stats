@@ -364,20 +364,32 @@ def index():
     skip_team = hidden("team")
     rows = [r for r in rows if str(r["team_id"]) not in skip_team]
     skip_match = hidden("match")
+
+    def shown(m):
+        """Hiding a team has to hide its fixtures too.
+
+        Dropping the standings row alone left the SUL side's matches in the
+        recent and upcoming lists, which is exactly where they were confusing:
+        BITS registers that team as plain "Lunds BK Mamba", so they read as
+        A-team fixtures.
+        """
+        return (str(m["match_id"]) not in skip_match
+                and str(m["home_id"]) not in skip_team
+                and str(m["away_id"]) not in skip_team)
     recent = q("""
         SELECT * FROM bits_match
         WHERE season = ? AND has_been_played = 1
           AND (home LIKE ? OR away LIKE ?)
         ORDER BY played_at DESC LIMIT 12
     """, s, CLUB, CLUB)
-    recent = [r for r in recent if str(r["match_id"]) not in skip_match][:8]
+    recent = [r for r in recent if shown(r)][:8]
     upcoming = q("""
         SELECT * FROM bits_match
         WHERE season = ? AND has_been_played = 0
           AND (home LIKE ? OR away LIKE ?)
         ORDER BY played_at LIMIT 12
     """, s, CLUB, CLUB)
-    upcoming = [r for r in upcoming if str(r["match_id"]) not in skip_match][:8]
+    upcoming = [r for r in upcoming if shown(r)][:8]
     caps = q("""SELECT COUNT(*) n, COUNT(DISTINCT book_id) books,
                        MIN(ts) first_ts, MAX(ts) last_ts FROM capture""")[0]
     sessions = q("""
@@ -402,7 +414,11 @@ def team_data(team_id):
         WHERE season = ? AND (home_id = ? OR away_id = ?)
         ORDER BY played_at
     """, s, team_id, team_id)
-    matches = [m for m in matches if str(m["match_id"]) not in hidden("match")]
+    skip_m, skip_t = hidden("match"), hidden("team")
+    matches = [m for m in matches
+               if str(m["match_id"]) not in skip_m
+               and str(m["home_id"]) not in skip_t
+               and str(m["away_id"]) not in skip_t]
     div = matches[0]["division_id"] if matches else None
     table = q("""SELECT * FROM bits_standing WHERE season = ? AND division_id = ?
                  ORDER BY points DESC, diff DESC""", s, div) if div else []
