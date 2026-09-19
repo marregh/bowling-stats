@@ -135,7 +135,13 @@ def sheet(con, match_id, ours, theirs):
         d["g"][r["game"]] = r["game_score"]
     out = []
     for who, d in rows.items():
-        gs = [d["g"].get(i) for i in (1, 2, 3, 4)]
+        # Numbered the way BITS numbers them: a player's own first game is g1,
+        # whichever serie it fell in. Storing a substitute's games under the
+        # serie number instead put Mieziewski's 198 and 214 in g3 and g4 where
+        # BITS has them in g1 and g2 -- the same two games, filed differently,
+        # which --verify duly reported as a disagreement.
+        played = [d["g"][i] for i in sorted(d["g"]) if d["g"][i] is not None]
+        gs = (played + [None, None, None, None])[:4]
         out.append({"player": who, "in_club": who in ours,
                     "games": gs, "series": sum(g for g in gs if g)})
     return sorted(out, key=lambda x: (-x["in_club"], -x["series"]))
@@ -241,10 +247,10 @@ def check_points(con):
     return 1 if bad else 0
 
 
-def do_match(con, m, write):
+def do_match(con, m, write, force=False):
     mid = m["match_id"]
-    if con.execute("SELECT 1 FROM bits_result WHERE match_id = ? LIMIT 1",
-                   (mid,)).fetchone():
+    if not force and con.execute("SELECT 1 FROM bits_result WHERE match_id = ? LIMIT 1",
+                                 (mid,)).fetchone():
         print(f"  {mid}: BITS har redan resultatet -- ror inte")
         return 0
     ours, theirs, problems = split_sides(con, mid)
@@ -378,6 +384,9 @@ def main():
                     help="compare provisional sheets against BITS, once it has "
                          "caught up")
     ap.add_argument("--write", action="store_true")
+    ap.add_argument("--force", action="store_true",
+                    help="re-derive a sheet even though BITS has published; "
+                         "for re-running a match after fixing the derivation")
     a = ap.parse_args()
 
     con = connect()
@@ -400,7 +409,7 @@ def main():
         print("ange --match eller --auto")
         return 2
 
-    n = sum(do_match(con, m, a.write) for m in ms)
+    n = sum(do_match(con, m, a.write, a.force) for m in ms)
     print()
     print(f"  {n} matcher {'skrivna' if a.write else 'skulle skrivas'}")
     return 0

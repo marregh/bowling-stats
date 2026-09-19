@@ -57,13 +57,19 @@ def roster_map():
     """, (CLUB, CLUB)):
         roster[name_key(r["player"])] = r["player"]
 
-    alias = {r["social_name"]: r for r in
+    # Keyed on the normalised name, not the literal string. Bowlit spells the
+    # same person differently in different competitions -- "JONATHAN WINHAGEN"
+    # in a practice session, "Winhagen, Jonathan" in a league match -- and an
+    # alias added for one spelling was silently not applying to the other. That
+    # left a player new to the club, who has no BITS history to fall back on,
+    # with shot statistics on the match page and none on his own.
+    alias = {name_key(r["social_name"]): r for r in
              con.execute("SELECT * FROM player_alias")}
 
     out = {}
     for r in con.execute("SELECT DISTINCT player FROM social_game"):
         name = r["player"]
-        a = alias.get(name) or alias.get(name.strip())
+        a = alias.get(name_key(name))
         if a is not None:
             if a["is_club"]:
                 out[name] = a["display"] or name
@@ -624,6 +630,21 @@ def players_data():
                 played_max=played_max)
 
 
+def licence_by_name(con):
+    """{name key: licence}, from every BITS result we hold.
+
+    Only for provisional sheets, where Bowlit gives a name and no licence. A
+    name that BITS has never recorded -- most of the opposition, and anyone new
+    to the club -- simply has none, and the scoresheet leaves them unlinked
+    rather than pointing at a page that cannot exist.
+    """
+    out = {}
+    for r in con.execute("SELECT DISTINCT player, lic FROM bits_result"):
+        if r["lic"]:
+            out.setdefault(name_key(r["player"]), r["lic"])
+    return out
+
+
 def match_frame_map(con, bits_names, social_names):
     """Map one match's Bowlit scoreboard names onto its BITS player names.
 
@@ -632,7 +653,7 @@ def match_frame_map(con, bits_names, social_names):
     Andre" resolving to "Andre Nilsson" cannot collide with someone else's
     roster entry. player_alias still wins where it has an opinion.
     """
-    alias = {r["social_name"]: r["display"] for r
+    alias = {name_key(r["social_name"]): r["display"] for r
              in con.execute("SELECT * FROM player_alias WHERE is_club = 1")}
     keyed = {}
     for p in bits_names:
@@ -640,7 +661,7 @@ def match_frame_map(con, bits_names, social_names):
 
     out = {}
     for sname in social_names:
-        toks = frozenset(name_key(alias.get(sname, sname)).split())
+        toks = frozenset(name_key(alias.get(name_key(sname), sname)).split())
         if not toks:
             continue
         if toks in keyed:
@@ -673,11 +694,16 @@ def match_data(match_id):
     if not results and prov:
         # A sheet we worked out from Bowlit because BITS has not published. It
         # is shaped like a BITS row so everything downstream is unchanged, and
-        # the fields BITS alone can supply -- licence, handicap, lane and match
-        # points, placing -- are None rather than invented. The template shows
-        # a banner saying so.
-        results = [dict(r, lic=None, hcp=None, total=r["series"],
-                        lane_point=None, rank_points=None, place=None)
+        # the fields BITS alone can supply -- handicap, lane points, placing --
+        # are None rather than invented. The template shows a banner saying so.
+        #
+        # The licence is the exception, and it has to be looked up rather than
+        # left None: it is what a player's page is addressed by, so without it
+        # every name in the scoresheet linked to /player/None.
+        lics = licence_by_name(con)
+        results = [dict(r, lic=lics.get(name_key(r["player"])), hcp=None,
+                        total=r["series"], lane_point=None, rank_points=None,
+                        place=None)
                    for r in con.execute(
                        """SELECT * FROM provisional_result WHERE match_id = ?
                           ORDER BY side, COALESCE(series, 0) DESC""", (match_id,))]
@@ -772,7 +798,7 @@ def players_xlsx():
 def player_data(lic):
     """Everything both the player page and its Excel export need."""
     s = season_arg()
-    hist = q("""
+    hist = [dict(r) for r in q("""
         SELECT m.played_at, m.round_id, m.division, m.hall, m.oil_pattern,
                CASE WHEN r.side='H' THEN m.away ELSE m.home END opponent,
                CASE WHEN r.side='H' THEN m.home ELSE m.away END own,
@@ -781,7 +807,37 @@ def player_data(lic):
         FROM bits_result r JOIN bits_match m ON m.match_id = r.match_id
         WHERE r.lic = ? AND m.season = ?
         ORDER BY m.played_at
-    """, lic, s)
+    """, lic, s)]
+
+    # The licence is how a player is addressed, and it only ever appears in
+    # BITS -- so the name has to be resolved before deciding the page is empty,
+    # not after. A player whose only match this season is one BITS has not
+    # published yet has no BITS row for it at all.
+    named = q("SELECT player FROM bits_result WHERE lic = ? LIMIT 1", lic)
+    if not named:
+        abort(404)
+    name = named[0]["player"]
+
+    # Provisional matches belong here too. The overview and the match page
+    # already show them; leaving them out of the player page meant a scoresheet
+    # linked to a page that denied the match had happened -- and for eleven of
+    # the sixteen names in an unpublished match, to no page at all.
+    key = name_key(name)
+    for r in q("""
+        SELECT m.played_at, m.round_id, m.division, m.hall, m.oil_pattern,
+               CASE WHEN p.side='H' THEN m.away ELSE m.home END opponent,
+               CASE WHEN p.side='H' THEN m.home ELSE m.away END own,
+               CASE WHEN p.side='H' THEN m.home_id ELSE m.away_id END own_id,
+               p.g1, p.g2, p.g3, p.g4, p.series, NULL hcp, p.series total,
+               NULL lane_point, NULL place, p.player
+        FROM provisional_result p JOIN bits_match m ON m.match_id = p.match_id
+        WHERE m.season = ?
+          AND NOT EXISTS (SELECT 1 FROM bits_result b
+                          WHERE b.match_id = p.match_id)
+    """, s):
+        if name_key(r["player"]) == key:
+            hist.append(dict(r))
+    hist.sort(key=lambda h: h["played_at"] or "")
     if not hist:
         abort(404)
 
@@ -799,7 +855,6 @@ def player_data(lic):
     windows = [w for w in (3, 5, 10, 20) if w < played]
 
     games = [g for h in hist for g in (h["g1"], h["g2"], h["g3"], h["g4"]) if g]
-    name = q("SELECT player FROM bits_result WHERE lic = ? LIMIT 1", lic)[0]["player"]
     stats = {
         "games": len(games),
         "avg": sum(games) / len(games) if games else 0,

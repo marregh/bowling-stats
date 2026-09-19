@@ -34,9 +34,9 @@
   <div class="card"><div class="k">Bästa serie</div><div class="v">{{ stats['high_game'] }}</div>
     <div class="s">bästa match {{ stats['high_series'] }}</div></div>
   <div class="card"><div class="k">200+</div><div class="v">{{ stats['over_200'] }}</div>
-    <div class="s">{{ (100 * stats['over_200'] / stats['games']) | round(0) | int }}% av serierna</div></div>
+    <div class="s">{% if stats['games'] %}{{ (100 * stats['over_200'] / stats['games']) | round(0) | int }}% av serierna{% else %}inga serier registrerade{% endif %}</div></div>
   <div class="card"><div class="k">Under 180</div><div class="v">{{ stats['under_180'] }}</div>
-    <div class="s">{{ (100 * stats['under_180'] / stats['games']) | round(0) | int }}% av serierna</div></div>
+    <div class="s">{% if stats['games'] %}{{ (100 * stats['under_180'] / stats['games']) | round(0) | int }}% av serierna{% else %}inga serier registrerade{% endif %}</div></div>
 </div>
 
 {% if shots and shots.get('frames') %}
