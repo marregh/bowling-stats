@@ -70,22 +70,17 @@ def jobs(con, days, from_date=None):
 
 
 def add_lane_groups(out):
-    """The lane group lives in BITS, not in our mirror -- ask for it."""
-    import json as _json
-    import urllib.parse
-    import urllib.request
+    """The lane group lives in BITS, not in our mirror -- ask for it.
 
-    def conn(path, **p):
-        u = ("https://bits.swebowl.se/MiscFrontApiConnector/" + path + "?"
-             + urllib.parse.urlencode(p))
-        q = urllib.request.Request(u, headers={
-            "User-Agent": "Mozilla/5.0", "Accept": "application/json",
-            "Referer": "https://bits.swebowl.se/seriespel"})
-        return _json.loads(urllib.request.urlopen(q, timeout=60).read().decode("utf-8"))
+    Through the shared client, not a hand-rolled urlopen: the host is behind an
+    antibot gate now, and a bare request gets a "Bot Detection" page with a 200
+    on it rather than an error.
+    """
+    from bits import Bits
 
     if not out:
         return out
-    rows = conn("ListMatches", seasonId=2026, clubId=33651)
+    rows = Bits().matches(2026)
     rows = rows if isinstance(rows, list) else rows.get("data", rows)
     by_id = {r["matchId"]: r for r in rows}
     for job in out:

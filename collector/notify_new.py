@@ -77,7 +77,13 @@ def dashboard_url(base, m):
 
 
 def pending(con, season=None, limit=None):
-    """Matches with results collected but never announced."""
+    """Matches with results collected but never announced.
+
+    Hidden rows are skipped, teams as well as matches. A hidden match announced
+    to Discord would link to a page that deliberately does not show it, which is
+    the worst of both: the result still gets out, and the link goes nowhere
+    useful.
+    """
     q = """
         SELECT m.*
         FROM bits_match m
@@ -85,6 +91,11 @@ def pending(con, season=None, limit=None):
           AND EXISTS (SELECT 1 FROM bits_result r WHERE r.match_id = m.match_id)
           AND NOT EXISTS (SELECT 1 FROM notified n
                           WHERE n.match_id = m.match_id AND n.kind = ?)
+          AND NOT EXISTS (SELECT 1 FROM hidden h WHERE h.kind = 'match'
+                          AND h.ref = CAST(m.match_id AS TEXT))
+          AND NOT EXISTS (SELECT 1 FROM hidden h WHERE h.kind = 'team'
+                          AND h.ref IN (CAST(m.home_id AS TEXT),
+                                        CAST(m.away_id AS TEXT)))
     """
     args = [KIND]
     if season:
