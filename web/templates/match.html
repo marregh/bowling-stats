@@ -110,7 +110,13 @@
   {% endfor %}
 </div>
 
-{% if not has_frames %}
+{% if too_thin %}
+<div class="panel"><div class="note">Slagstatistik är tyvärr otillgänglig för
+  den här matchen. Inspelningen av hallens tavlor avbröts medan matchen
+  pågick, och det lilla som hann läsas in räcker inte för att säga något om
+  hur någon spelade &mdash; därför visas ingenting hellre än en bråkdel.
+  Käglor och poäng nedan är kompletta och hämtade från BITS.</div></div>
+{% elif not has_frames %}
 <div class="panel"><div class="note">Ingen slagdata för den här matchen &mdash;
   Bowlit täcker bara en del av hallarna. Nedan är BITS egna siffror.
   {% if boards %}<br>Däremot finns <b>{{ boards }}</b> sparade bilder av

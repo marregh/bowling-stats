@@ -108,9 +108,14 @@ def shot_stats(player_name, season, include_practice=True, since=None):
         WHERE s.season = ? {"" if include_practice else "AND s.adhoc = 0"}
               {"AND substr(s.played_on, 1, 10) >= ?" if since else ""}
     """, (season, since) if since else (season,)).fetchall()
+    # The same matches the match page refuses to show statistics for. Without
+    # this a player page would list a one-serie row for a match whose own page
+    # says its shot data is unavailable, and quietly fold those frames into his
+    # season averages.
+    thin = thin_frame_matches(con)
     tot, per_match = {}, {}
     for r in rows:
-        if r["player"] not in mine:
+        if r["player"] not in mine or r["sid"] in thin:
             continue
         st = frames.stats(json.loads(r["balls"]))
         tot = frames.add(tot, st)
@@ -630,6 +635,46 @@ def players_data():
                 played_max=played_max)
 
 
+# How much of our own side's games a match's frame data has to cover before it
+# is worth showing at all. Below this it is a scattering rather than a sample:
+# the Baltiska capture died mid-match on 2026-09-19 and left five single games
+# out of thirty-two, one apiece for five bowlers who each played four. A row
+# like that sits next to the player's full series total and reads as his
+# figures for the match, which it is not.
+#
+# The line is set where it is because the real cases fall either side of it:
+# that match covers 9%, while the U team's Klippan boards -- decoded from
+# photographs, every card verified against its own printed totals -- cover
+# half, and those have been on the site since September and are worth keeping.
+MIN_FRAME_COVERAGE = 0.5
+
+
+def thin_frame_matches(con):
+    """League matches whose frame data covers too little of our side to show.
+
+    Judged on our own players only. A walkover where the opposition fielded
+    nobody is complete as far as we are concerned, and must not be suppressed
+    for missing games nobody bowled.
+    """
+    played = {r["match_id"]: r["n"] for r in con.execute("""
+        SELECT r.match_id, SUM((r.g1>0)+(r.g2>0)+(r.g3>0)+(r.g4>0)) n
+        FROM bits_result r JOIN bits_match m ON m.match_id = r.match_id
+        WHERE (r.side = 'H' AND m.home LIKE ?) OR (r.side = 'A' AND m.away LIKE ?)
+        GROUP BY r.match_id""", (CLUB, CLUB))}
+    if not played:
+        return set()
+    ours = roster_map()
+    got = {}
+    for r in con.execute("SELECT match_id, player FROM social_game"):
+        if r["player"] in ours:
+            got[r["match_id"]] = got.get(r["match_id"], 0) + 1
+    # Only matches that actually have some frame data. A match with none is
+    # not "too thin to show" -- it is a hall Bowlit never reached, which the
+    # page already says in its own words.
+    return {mid for mid, n in played.items()
+            if n and 0 < got.get(mid, 0) < MIN_FRAME_COVERAGE * n}
+
+
 def licence_by_name(con):
     """{name key: licence}, from every BITS result we hold.
 
@@ -709,6 +754,11 @@ def match_data(match_id):
                           ORDER BY side, COALESCE(series, 0) DESC""", (match_id,))]
     social = con.execute("""SELECT player, game, game_score, balls
                             FROM social_game WHERE match_id = ?""", (match_id,)).fetchall()
+    # Too little to be worth showing? Then show none of it, rather than a few
+    # players with a single game each and everyone else blank.
+    too_thin = bool(social) and match_id in thin_frame_matches(con)
+    if too_thin:
+        social = []
 
     shots = {}
     if social:
@@ -794,6 +844,7 @@ def match_data(match_id):
             "has_frames": any(s["covered"] for s in sides),
             "shot_games": shot_games, "played_games": played_games,
             "partial_ok": shot_games >= played_games,
+            "too_thin": too_thin,
             "running": running, "expected_games": m["expected_games"]}
 
 
