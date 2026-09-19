@@ -20,6 +20,11 @@ ALLEYS = {"Lunds Bowlinghall": 1037, "Lerum Pinyard Bowling": 1069}
 # that appears late or a weekend of failed runs, short enough that the 50-odd
 # away matches at non-Bowlit alleys are not re-asked forever.
 RETRY_DAYS = 14
+# Four games across eight lanes take about three hours -- the same figure
+# board.MATCH_HOURS uses to size a capture window. Asking too early is cheap:
+# an empty answer is recorded as empty and retried for RETRY_DAYS, so the only
+# cost of guessing early is one request that finds nothing.
+LIKELY_OVER_HOURS = 3
 
 
 def ingest(con, match_id, alley_id):
@@ -101,10 +106,24 @@ def main():
     # data is as fixed as its scores, and re-walking it every run buys nothing.
     seasons = a.season or [current_season()]
     qmarks = ",".join("?" * len(seasons))
+    # Not "BITS says played" alone. Bowlit publishes a scoresheet when the
+    # last ball is thrown; BITS waits for a human to register the result, and
+    # on 2026-09-19 that was hours -- the A team's match was in by early
+    # afternoon while F1, who finished earlier, was not. Gating frame data on
+    # BITS meant the two delays stacked, and the match reached the site with no
+    # shot statistics on it.
+    #
+    # So: BITS says played, or the throw-off was long enough ago that the match
+    # must be over. Fixtures BITS has not given a time to sit at midnight and
+    # cannot be judged this way, so they keep waiting for BITS.
     rows = con.execute(f"""
         SELECT m.match_id, m.played_at, m.hall, m.home, m.away
         FROM bits_match m
-        WHERE m.season IN ({qmarks}) AND m.has_been_played = 1
+        WHERE m.season IN ({qmarks})
+          AND (m.has_been_played = 1
+               OR (m.played_at NOT LIKE '%T00:00:00'
+                   AND julianday(m.played_at) + {LIKELY_OVER_HOURS} / 24.0
+                       < julianday('now', 'localtime')))
         ORDER BY m.played_at
     """, seasons).fetchall()
 
