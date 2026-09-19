@@ -376,17 +376,29 @@ def index():
         return (str(m["match_id"]) not in skip_match
                 and str(m["home_id"]) not in skip_team
                 and str(m["away_id"]) not in skip_team)
+    # A match with a provisional sheet has been played, whatever BITS thinks --
+    # leaving it under "kommande" while its scores are on the site would be the
+    # worse of the two errors.
     recent = q("""
-        SELECT * FROM bits_match
-        WHERE season = ? AND has_been_played = 1
-          AND (home LIKE ? OR away LIKE ?)
-        ORDER BY played_at DESC LIMIT 12
+        SELECT m.*, p.home_score AS p_home, p.away_score AS p_away
+        FROM bits_match m
+        LEFT JOIN provisional_match p
+               ON p.match_id = m.match_id
+              -- Only while BITS still has nothing. The provisional row is left
+              -- in place as a record of what we showed, but the moment real
+              -- results land they are what the site reads.
+              AND NOT EXISTS (SELECT 1 FROM bits_result r
+                              WHERE r.match_id = m.match_id)
+        WHERE m.season = ? AND (m.has_been_played = 1 OR p.match_id IS NOT NULL)
+          AND (m.home LIKE ? OR m.away LIKE ?)
+        ORDER BY m.played_at DESC LIMIT 12
     """, s, CLUB, CLUB)
     recent = [r for r in recent if shown(r)][:8]
     upcoming = q("""
         SELECT * FROM bits_match
         WHERE season = ? AND has_been_played = 0
           AND (home LIKE ? OR away LIKE ?)
+          AND match_id NOT IN (SELECT match_id FROM provisional_match)
         ORDER BY played_at LIMIT 12
     """, s, CLUB, CLUB)
     upcoming = [r for r in upcoming if shown(r)][:8]
@@ -644,13 +656,30 @@ def match_data(match_id):
     for the players we can line up, when the hall was covered at all."""
     con = connect()
     m = con.execute("SELECT * FROM bits_match WHERE match_id = ?", (match_id,)).fetchone()
-    if not m or not m["has_been_played"]:
+    if not m:
+        abort(404)
+    prov = con.execute("""SELECT * FROM provisional_match WHERE match_id = ?
+                          AND NOT EXISTS (SELECT 1 FROM bits_result r
+                                          WHERE r.match_id = ?)""",
+                       (match_id, match_id)).fetchone()
+    if not m["has_been_played"] and not prov:
         abort(404)
     if str(match_id) in hidden("match"):
         abort(404)
 
     results = con.execute("""SELECT * FROM bits_result WHERE match_id = ?
                              ORDER BY side, COALESCE(series, 0) DESC""", (match_id,)).fetchall()
+    if not results and prov:
+        # A sheet we worked out from Bowlit because BITS has not published. It
+        # is shaped like a BITS row so everything downstream is unchanged, and
+        # the fields BITS alone can supply -- licence, handicap, lane and match
+        # points, placing -- are None rather than invented. The template shows
+        # a banner saying so.
+        results = [dict(r, lic=None, hcp=None, total=r["series"],
+                        lane_point=None, rank_points=None, place=None)
+                   for r in con.execute(
+                       """SELECT * FROM provisional_result WHERE match_id = ?
+                          ORDER BY side, COALESCE(series, 0) DESC""", (match_id,))]
     social = con.execute("""SELECT player, game, game_score, balls
                             FROM social_game WHERE match_id = ?""", (match_id,)).fetchall()
 
@@ -688,8 +717,13 @@ def match_data(match_id):
                 "st": agg or None,
                 "covered": sum(1 for p in players if p["st"])}
 
-    sides = [build("H", m["home"], m["home_score"], m["home_pts"]),
-             build("A", m["away"], m["away_score"], m["away_pts"])]
+    # On a provisional sheet the pinfall is ours to add up, but the match
+    # points are not: they depend on handicap and on lane-by-lane comparison
+    # that only BITS publishes. Showing nothing there is the honest answer.
+    sides = [build("H", m["home"], prov["home_score"] if prov else m["home_score"],
+                   None if prov else m["home_pts"]),
+             build("A", m["away"], prov["away_score"] if prov else m["away_score"],
+                   None if prov else m["away_pts"])]
 
     # No frame data does not always mean nothing was recorded: where the hall
     # is on scoring.se we photograph the boards, and those images are kept even
@@ -705,7 +739,7 @@ def match_data(match_id):
 
     ours = m["home_id"] if m["home_id"] in TEAM_TARGET else m["away_id"]
     return {"m": m, "sides": sides, "season": m["season"], "boards": boards,
-            "target": team_target(ours),
+            "target": team_target(ours), "prov": prov,
             "has_frames": any(s["covered"] for s in sides)}
 
 

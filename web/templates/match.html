@@ -74,6 +74,15 @@
   {%- if m['oil_pattern'] %} &middot; {{ m['oil_pattern'] }}{% endif %}
 </div>
 
+{% if prov %}
+<div class="panel"><div class="note"><b>Preliminärt resultat.</b>
+  BITS har inte publicerat matchen än, så siffrorna nedan är räknade ur
+  hallens egen scoringdata. Käglor och slagstatistik är spelarnas riktiga,
+  men <b>matchpoäng, handicap och placeringar saknas</b> &mdash; dem
+  publicerar bara BITS &mdash; och lagindelningen är härledd ur vilka som
+  delade bana. Sidan ersätts automatiskt när BITS kommer ikapp.</div></div>
+{% endif %}
+
 <div class="cards">
   {% for s in sides %}
   <div class="card">

@@ -159,6 +159,25 @@ CREATE TABLE IF NOT EXISTS bits_result_gap (
     match_id INTEGER, want INTEGER, got INTEGER, ts TEXT,
     PRIMARY KEY (match_id, want)
 );
+
+-- Results we worked out ourselves, for a match BITS has not published yet.
+--
+-- Kept apart from bits_result on purpose. This is not BITS data and must never
+-- be mistaken for it: there are no licence numbers, no handicap, no lane or
+-- match points, and the home/away split is inferred rather than stated. The
+-- website reads these only when bits_result has nothing, and says on the page
+-- that it is doing so. When BITS finally publishes, bits_result wins
+-- automatically and these rows become dead weight rather than a conflict.
+CREATE TABLE IF NOT EXISTS provisional_result (
+    match_id INTEGER, player TEXT, side TEXT,
+    g1 INTEGER, g2 INTEGER, g3 INTEGER, g4 INTEGER, series INTEGER,
+    PRIMARY KEY (match_id, player)
+);
+
+CREATE TABLE IF NOT EXISTS provisional_match (
+    match_id INTEGER PRIMARY KEY, source TEXT, ts TEXT,
+    home_score INTEGER, away_score INTEGER, note TEXT
+);
 """
 
 
