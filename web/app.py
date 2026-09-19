@@ -380,7 +380,8 @@ def index():
     # leaving it under "kommande" while its scores are on the site would be the
     # worse of the two errors.
     recent = q("""
-        SELECT m.*, p.home_score AS p_home, p.away_score AS p_away
+        SELECT m.*, p.home_score AS p_home, p.away_score AS p_away,
+               p.home_pts AS p_home_pts, p.away_pts AS p_away_pts
         FROM bits_match m
         LEFT JOIN provisional_match p
                ON p.match_id = m.match_id
@@ -717,13 +718,14 @@ def match_data(match_id):
                 "st": agg or None,
                 "covered": sum(1 for p in players if p["st"])}
 
-    # On a provisional sheet the pinfall is ours to add up, but the match
-    # points are not: they depend on handicap and on lane-by-lane comparison
-    # that only BITS publishes. Showing nothing there is the honest answer.
+    # On a provisional sheet both the pinfall and the match points are worked
+    # out from the scratch scores. The points rule -- a point per lane pair
+    # plus one for the serie total, a tied pair awarding none -- reproduces
+    # what BITS published on all 17 past matches it could be checked against.
     sides = [build("H", m["home"], prov["home_score"] if prov else m["home_score"],
-                   None if prov else m["home_pts"]),
+                   prov["home_pts"] if prov else m["home_pts"]),
              build("A", m["away"], prov["away_score"] if prov else m["away_score"],
-                   None if prov else m["away_pts"])]
+                   prov["away_pts"] if prov else m["away_pts"])]
 
     # No frame data does not always mean nothing was recorded: where the hall
     # is on scoring.se we photograph the boards, and those images are kept even

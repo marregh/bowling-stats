@@ -187,6 +187,15 @@ def migrate(con):
     CREATE TABLE IF NOT EXISTS silently leaves an older table alone, so a new
     column has to be added by hand. Cheap enough to check on every connect.
     """
+    have = {r[1] for r in con.execute("PRAGMA table_info(provisional_match)")}
+    if have and "home_pts" not in have:
+        # Match points worked out from the scratch scores. Added after the
+        # table, once the scoring rule had been checked against BITS on 17
+        # matches and reproduced every one.
+        con.execute("ALTER TABLE provisional_match ADD COLUMN home_pts REAL")
+        con.execute("ALTER TABLE provisional_match ADD COLUMN away_pts REAL")
+        con.commit()
+
     have = {r[1] for r in con.execute("PRAGMA table_info(bits_match)")}
     if "first_seen_played" not in have:
         con.execute("ALTER TABLE bits_match ADD COLUMN first_seen_played TEXT")

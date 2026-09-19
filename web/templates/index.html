@@ -51,8 +51,10 @@
 {% for m in recent %}
   {% set home = 'Mamba' in m['home'] %}
   {% set prov = m['p_home'] is not none %}
-  {% set us = m['home_pts'] if home else m['away_pts'] %}
-  {% set them = m['away_pts'] if home else m['home_pts'] %}
+  {% set us = (m['p_home_pts'] if home else m['p_away_pts']) if prov
+              else (m['home_pts'] if home else m['away_pts']) %}
+  {% set them = (m['p_away_pts'] if home else m['p_home_pts']) if prov
+                else (m['away_pts'] if home else m['home_pts']) %}
   {% set hs = m['p_home'] if prov else m['home_score'] %}
   {% set as_ = m['p_away'] if prov else m['away_score'] %}
   {# every row here is has_been_played = 1 by the query, so all of them link #}
@@ -64,8 +66,10 @@
     <td>{{ (m['away'] if home else m['home']) | team }}</td>
     <td class="num mut">{{ hs if home else as_ }}–{{ as_ if home else hs }}</td>
     <td class="num">
-      {%- if prov %}<span class="mut" title="BITS har inte publicerat resultatet än">prel.</span>
-      {%- else %}{{ us | round(0) | int }}–{{ them | round(0) | int }}{% endif %}</td>
+      {%- if us is none %}–
+      {%- else %}{{ us | round(0) | int }}–{{ them | round(0) | int }}
+        {%- if prov %} <span class="mut" title="Uträknat ur hallens scoringdata; BITS har inte publicerat matchen än">prel.</span>{% endif %}
+      {%- endif %}</td>
     <td class="mut">{{ m['hall'] }}</td>
   </tr>
 {% endfor %}

@@ -36,6 +36,14 @@ from bits import TEAMS, current_season
 from store import connect
 
 TEAM_SIZE = 8
+# The U team's league is the one that uses handicap, and it is not scored on
+# lane points at all -- BITS puts the pinfall in the points columns there
+# (2881-3090, not 3-9). Every other side plays "Banpoäng 8 man 8 banor".
+HANDICAP_TEAMS = {162098}          # Lunds BK Mamba U
+
+
+def banpoang_league(m):
+    return not (m["home_id"] in HANDICAP_TEAMS or m["away_id"] in HANDICAP_TEAMS)
 
 
 def name_key(n):
@@ -133,6 +141,106 @@ def sheet(con, match_id, ours, theirs):
     return sorted(out, key=lambda x: (-x["in_club"], -x["series"]))
 
 
+def match_points(con, match_id, home_players):
+    """Work out the 20 league points from the scratch scores.
+
+    The format is "Banpoäng, 8 man, 8 banor": in each serie the eight bowlers a
+    side are split across four lane pairs, the higher pinfall on a pair takes a
+    point, and a fifth point goes to the higher serie total. Four series makes
+    twenty. Read straight off the Falkenberg feed's own serie_results, and
+    checked against BITS: it reproduces 13-7 there exactly.
+
+    Handicap does not enter into it. Only the U team's league uses handicap,
+    and that league is not scored this way at all.
+
+    Returns (home, away, per-serie detail), or None if the lanes do not divide
+    into pairs of two a side -- which is the shape this rule depends on.
+    """
+    home_total = away_total = 0.0
+    detail = []
+    games = [r[0] for r in con.execute(
+        "SELECT DISTINCT game FROM social_game WHERE match_id = ? ORDER BY game",
+        (match_id,))]
+    for g in games:
+        bylane = {}
+        for r in con.execute("""SELECT player, lane, game_score FROM social_game
+                                WHERE match_id = ? AND game = ?""", (match_id, g)):
+            bylane.setdefault(r["lane"], []).append(r)
+        if not bylane:
+            continue
+        lanes = sorted(bylane)
+        hs = aws = 0.0
+        hpins = apins = 0
+        pairs = []
+        for lo in range(min(lanes) | 1, max(lanes) + 1, 2):
+            both = bylane.get(lo, []) + bylane.get(lo + 1, [])
+            mine = [r for r in both if r["player"] in home_players]
+            yours = [r for r in both if r["player"] not in home_players]
+            if len(mine) != 2 or len(yours) != 2:
+                return None
+            a = sum(r["game_score"] or 0 for r in mine)
+            b = sum(r["game_score"] or 0 for r in yours)
+            hpins += a
+            apins += b
+            # A tied pair drops its point entirely -- neither side scores it.
+            # Checked against BITS: sharing it as a half gave 9.5-10.5 where
+            # BITS had 9-10, and 9-11 where BITS had 8-10. A match with ties
+            # in it simply does not award all twenty points.
+            if a > b:
+                hs += 1
+            elif b > a:
+                aws += 1
+            pairs.append((lo, lo + 1, a, b))
+        # and the fifth point, for the serie as a whole
+        if hpins > apins:
+            hs += 1
+        elif apins > hpins:
+            aws += 1
+        home_total += hs
+        away_total += aws
+        detail.append({"serie": g, "home": hs, "away": aws,
+                       "home_pins": hpins, "away_pins": apins, "pairs": pairs})
+    return home_total, away_total, detail
+
+
+def check_points(con):
+    """Run the points rule on matches BITS has already scored, and compare."""
+    rows = con.execute("""
+        SELECT m.* FROM bits_match m
+        WHERE m.has_been_played = 1 AND m.home_pts IS NOT NULL
+          AND EXISTS (SELECT 1 FROM social_game g WHERE g.match_id = m.match_id)
+        ORDER BY m.played_at""").fetchall()
+    good = bad = 0
+    for m in rows:
+        if not banpoang_league(m):
+            continue
+        mid = m["match_id"]
+        home = {r["player"] for r in con.execute(
+            """SELECT g.player FROM social_game g WHERE g.match_id = ?""", (mid,))}
+        # Which of the Bowlit names are the home side? Use the BITS sheet.
+        sides = {}
+        for r in con.execute("SELECT player, side FROM bits_result WHERE match_id = ?",
+                             (mid,)):
+            sides[name_key(r["player"])] = r["side"]
+        home = {p for p in home if sides.get(name_key(p)) == "H"}
+        if not home:
+            continue
+        got = match_points(con, mid, home)
+        if not got:
+            print(f"  {m['home'][:24]:<26} - {m['away'][:22]:<24} banparen gar inte ihop")
+            continue
+        h, a, _ = got
+        ok = (h == m["home_pts"] and a == m["away_pts"])
+        good += ok
+        bad += not ok
+        print(f"  {m['home'][:24]:<26} - {m['away'][:22]:<24} "
+              f"raknat {h:g}-{a:g}  BITS {m['home_pts']:g}-{m['away_pts']:g}  "
+              f"{'OK' if ok else 'FEL'}")
+    print()
+    print(f"  {good} stammer, {bad} fel")
+    return 1 if bad else 0
+
+
 def do_match(con, m, write):
     mid = m["match_id"]
     if con.execute("SELECT 1 FROM bits_result WHERE match_id = ? LIMIT 1",
@@ -150,8 +258,24 @@ def do_match(con, m, write):
     rows = sheet(con, mid, ours, theirs)
     hs = sum(r["series"] for r in rows if r["in_club"] == home_is_ours)
     aw = sum(r["series"] for r in rows if r["in_club"] != home_is_ours)
+
+    hp = ap = None
+    if banpoang_league(m):
+        home_side = {r["player"] for r in rows if r["in_club"] == home_is_ours}
+        got = match_points(con, mid, home_side)
+        if got:
+            hp, ap, detail = got
+            for d in detail:
+                print(f"      serie {d['serie']}: {d['home_pins']} - {d['away_pins']}"
+                      f"  => {d['home']:g} - {d['away']:g}")
+        else:
+            print("      banparen gar inte ihop -- inga poang raknas")
+    else:
+        print("      handicapserie -- poang raknas inte har")
+
+    pts = f", {hp:g} - {ap:g} poang" if hp is not None else ""
     print(f"    {len(ours)} egna, {len(theirs)} motstandare, "
-          f"{hs} - {aw} kglor")
+          f"{hs} - {aw} kglor{pts}")
     for r in rows:
         side = m["home"] if r["in_club"] == home_is_ours else m["away"]
         print(f"      {r['player']:<26} {str(r['games']):<26} {r['series']:>4}"
@@ -164,9 +288,10 @@ def do_match(con, m, write):
             side = "H" if r["in_club"] == home_is_ours else "A"
             con.execute("INSERT OR REPLACE INTO provisional_result VALUES (?,?,?,?,?,?,?,?)",
                         (mid, r["player"], side, *r["games"], r["series"]))
-        con.execute("INSERT OR REPLACE INTO provisional_match VALUES (?,?,?,?,?,?)",
+        con.execute("""INSERT OR REPLACE INTO provisional_match
+                       VALUES (?,?,?,?,?,?,?,?)""",
                     (mid, "bowlit", now, hs, aw,
-                     "Bowlit-data; BITS har inte publicerat resultatet"))
+                     "Bowlit-data; BITS har inte publicerat resultatet", hp, ap))
         con.commit()
         print(f"    skrivet som preliminart")
     return 1
@@ -246,6 +371,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--match", type=int)
     ap.add_argument("--auto", action="store_true")
+    ap.add_argument("--check-points", action="store_true", dest="check_points",
+                    help="run the points rule on matches BITS has already "
+                         "scored, and compare")
     ap.add_argument("--verify", action="store_true",
                     help="compare provisional sheets against BITS, once it has "
                          "caught up")
@@ -253,6 +381,8 @@ def main():
     a = ap.parse_args()
 
     con = connect()
+    if a.check_points:
+        return check_points(con)
     if a.verify:
         return verify(con)
     if a.match:
