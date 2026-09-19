@@ -23,6 +23,7 @@ page's own script: find the smallest n with sha256(seed + str(n)) starting
 "0000", POST it to /challenge, and the session cookie is then good for ordinary
 requests. It costs about a twentieth of a second, and we pay it once per run.
 """
+import datetime
 import hashlib
 import http.cookiejar
 import json
@@ -37,6 +38,17 @@ BASE = "https://bits.swebowl.se/MiscFrontApiConnector"
 HOME = "https://bits.swebowl.se/seriespel"
 CHALLENGE = "https://bits.swebowl.se/challenge"
 CLUB_ID = int(os.environ.get("BITS_CLUB_ID", "33651"))
+
+# A BITS season is named for the calendar year it starts in: season 2026 is
+# 2026/27, thrown off in September and finished by April. July is the divide --
+# late enough that no season is still running, early enough that next season's
+# fixtures are already published.
+SEASON_STARTS_MONTH = 7
+
+
+def current_season(today=None):
+    d = today or datetime.date.today()
+    return d.year if d.month >= SEASON_STARTS_MONTH else d.year - 1
 
 # Insertion order is the order the site's nav tabs appear in, so keep them in
 # the club's own reading order rather than sorted by id.

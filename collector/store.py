@@ -145,6 +145,20 @@ CREATE TABLE IF NOT EXISTS bits_standing (
     home_pts INTEGER, away_pts INTEGER, diff INTEGER, points REAL,
     PRIMARY KEY (season, division_id, team_id)
 );
+
+-- Result fetches whose player rows did not add up to the match score, so that
+-- one that can never add up is not re-asked for on every run forever.
+--
+-- `want` is the match score at the time of the attempt, and it is what makes
+-- this safe: a protocol BITS later corrects arrives with a different score, so
+-- it counts as new information and is fetched again. Only an unchanged
+-- disagreement is left alone. Match 3318305 is the case in hand -- a SUL
+-- fixture BITS publishes as 636-774 with every player's games as 0, which will
+-- not reconcile no matter how often it is asked.
+CREATE TABLE IF NOT EXISTS bits_result_gap (
+    match_id INTEGER, want INTEGER, got INTEGER, ts TEXT,
+    PRIMARY KEY (match_id, want)
+);
 """
 
 

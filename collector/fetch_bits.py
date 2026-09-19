@@ -1,8 +1,19 @@
-"""Mirror the club's BITS data into SQLite. Safe to re-run; upserts throughout."""
+"""Mirror the club's BITS data into SQLite. Safe to re-run; upserts throughout.
+
+Only the current season by default. A finished season cannot change: 2025 sat
+at 93 of 93 played and fetched nothing for a week, yet half of every run went
+on re-asking for its fixture list and six standings tables. Naming a season
+explicitly still works, which is how a finished one gets refreshed if BITS ever
+corrects it:
+
+    python collector/fetch_bits.py           # current season
+    python collector/fetch_bits.py 2025      # one finished season
+    python collector/fetch_bits.py --all     # everything we hold
+"""
 import argparse, sys
 from datetime import datetime, timezone
 
-from bits import Bits, TEAMS
+from bits import Bits, TEAMS, current_season
 from store import connect
 
 
@@ -60,14 +71,21 @@ def sync_season(con, api, season, verbose=True):
             first_seen=now if m["matchHasBeenPlayed"] else None))
     con.commit()
 
+    # Every request first, then one short write. Interleaved, the first INSERT
+    # opened a write transaction that stayed open across the remaining five
+    # GetStandings calls -- so the database was locked against every other
+    # process for as long as BITS took to answer all of them. At last week's
+    # 8s that was invisible; at today's 280s it is minutes of held lock.
+    standings = []
     for div in sorted(divisions):
         for s in api.standing(season, div) or []:
-            con.execute("""INSERT OR REPLACE INTO bits_standing VALUES
-                (?,?,?,?,?,?,?,?,?,?,?,?)""", (
+            standings.append((
                 season, div, s["standingsTeamId"], s["standingsTeamName"],
                 s["standingsMatches"], s["standingsWin"], s["standingsDraw"],
                 s["standingsLoss"], s["standingsHomePoints"], s["standingsAwayPoints"],
                 s["standingsDiff"], s["standingsPoints"]))
+    con.executemany("""INSERT OR REPLACE INTO bits_standing VALUES
+        (?,?,?,?,?,?,?,?,?,?,?,?)""", standings)
     con.commit()
 
     played = [m for m in matches if m["matchHasBeenPlayed"]]
@@ -85,12 +103,23 @@ def sync_season(con, api, season, verbose=True):
         want = (m["matchHomeTeamScore"] or 0) + (m["matchAwayTeamScore"] or 0)
         if have["n"] and (want == 0 or have["pins"] == want):
             continue
-        if have["n"]:
-            if verbose:
-                print(f"   {m['matchId']}: {have['pins']} kglor lagrade, BITS sager "
-                      f"{want} -- hamtar om", flush=True)
-            con.execute("DELETE FROM bits_result WHERE match_id = ?", (m["matchId"],))
+        # Already asked about this exact disagreement and BITS said the same
+        # thing? Then asking again is a request spent to learn nothing.
+        if have["n"] and con.execute(
+                "SELECT 1 FROM bits_result_gap WHERE match_id = ? AND want = ?",
+                (m["matchId"], want)).fetchone():
+            continue
+        if have["n"] and verbose:
+            print(f"   {m['matchId']}: {have['pins']} kglor lagrade, BITS sager "
+                  f"{want} -- hamtar om", flush=True)
+        # Fetch first, delete after. The DELETE used to come before this call,
+        # which opened a write transaction and then held it across a request to
+        # BITS -- fine at the 8s BITS of last week, ruinous today at 280s: that
+        # is a write lock on the whole database for the length of a network
+        # round trip, and it is what killed the Falkenberg capture at 12:00:39.
         res = api.match_results(m["matchId"], m["matchSchemeId"]) or {}
+        if have["n"]:
+            con.execute("DELETE FROM bits_result WHERE match_id = ?", (m["matchId"],))
         for side, key in (("H", "playerListHome"), ("A", "playerListAway")):
             for p in res.get(key) or []:
                 lic = p.get("licNbr") or p.get("player", "")
@@ -101,6 +130,18 @@ def sync_season(con, api, season, verbose=True):
                     p.get("result1"), p.get("result2"), p.get("result3"), p.get("result4"),
                     p.get("hcp"), p.get("totalResult"), p.get("totalResultWithoutHcp"),
                     p.get("lanePoint"), p.get("rankPoints"), p.get("place")))
+        # Did this fetch actually settle it? If the rows still do not add up to
+        # the match score, record the disagreement so the next run recognises
+        # it rather than spending another request on the same answer.
+        now_pins = con.execute(
+            "SELECT COALESCE(SUM(total), 0) FROM bits_result WHERE match_id = ?",
+            (m["matchId"],)).fetchone()[0]
+        if want and now_pins != want:
+            con.execute("INSERT OR REPLACE INTO bits_result_gap VALUES (?,?,?,?)",
+                        (m["matchId"], want, now_pins, now))
+            if verbose:
+                print(f"   {m['matchId']}: BITS ger {now_pins} av {want} kglor "
+                      f"-- slutar fraga om just detta", flush=True)
         got += 1
         con.commit()
         if verbose and got % 10 == 0:
@@ -112,11 +153,23 @@ def sync_season(con, api, season, verbose=True):
 
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("seasons", nargs="*", type=int, default=[2025, 2026])
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("seasons", nargs="*", type=int,
+                    help="season ids; defaults to the current one")
+    ap.add_argument("--all", action="store_true",
+                    help="every season already in the mirror")
     a = ap.parse_args()
     con, api = connect(), Bits()
-    for s in a.seasons:
+
+    if a.seasons:
+        seasons = a.seasons
+    elif a.all:
+        seasons = [r[0] for r in con.execute(
+            "SELECT DISTINCT season FROM bits_match ORDER BY season")]
+    else:
+        seasons = [current_season()]
+
+    for s in seasons:
         sync_season(con, api, s)
     print("teams:", ", ".join(TEAMS.values()))
 

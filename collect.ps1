@@ -8,7 +8,10 @@
 # matches whose results it already holds.
 [CmdletBinding()]
 param(
-    [int[]] $Seasons = @(2025, 2026),
+    # Empty means "whatever the collectors call the current season". The rule
+    # lives in bits.current_season and nowhere else -- a second copy of it here
+    # would be a hardcoded year waiting to go stale next July.
+    [int[]] $Seasons = @(),
     # Re-ask for matches previously found empty, past the usual retry window.
     [switch] $Refetch
 )
@@ -38,7 +41,8 @@ function Write-Log($text) {
     Add-Content -Path $log -Value $line -Encoding utf8
 }
 
-Write-Log "--- collect start (seasons: $($Seasons -join ', ')) ---"
+$what = if ($Seasons) { $Seasons -join ', ' } else { 'innevarande' }
+Write-Log "--- collect start (seasons: $what) ---"
 
 $failed = 0
 foreach ($step in @(

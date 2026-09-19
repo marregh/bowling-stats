@@ -11,6 +11,7 @@ import argparse, json
 from datetime import datetime, timezone
 
 import social
+from bits import SEASON_STARTS_MONTH, current_season
 from store import connect
 
 ALLEYS = {"Lunds Bowlinghall": 1037, "Lerum Pinyard Bowling": 1069}
@@ -63,7 +64,7 @@ def ingest(con, match_id, alley_id):
 def season_of(date_str):
     """Bowling seasons run July-June: 2026-08-30 is season 2026."""
     y, m = int(date_str[:4]), int(date_str[5:7])
-    return y if m >= 7 else y - 1
+    return y if m >= SEASON_STARTS_MONTH else y - 1
 
 
 def ingest_session(con, booking, alley, played_on, kind, label):
@@ -96,7 +97,9 @@ def main():
         print(f"booking {a.booking}: {n} games")
         return
 
-    seasons = a.season or [2025, 2026]
+    # Current season only unless asked otherwise: a finished season's frame
+    # data is as fixed as its scores, and re-walking it every run buys nothing.
+    seasons = a.season or [current_season()]
     qmarks = ",".join("?" * len(seasons))
     rows = con.execute(f"""
         SELECT m.match_id, m.played_at, m.hall, m.home, m.away
