@@ -53,6 +53,11 @@ foreach ($step in @(
     # and handicaps BITS publishes; before notify, so a match is announced with
     # its shot statistics already on the page.
     @{ name = 'ingest_scoring'; args = @("collector\ingest_scoring.py", "--auto", "--write") },
+    # And off the bowlingscoring.se live feeds, for the halls that publish one.
+    # Same place in the order and for the same reasons as ingest_scoring: after
+    # fetch_bits, whose player scores every card is checked against, and before
+    # notify.
+    @{ name = 'decode_falkenberg'; args = @("collector\decode_falkenberg.py", "--auto", "--write") },
     # Last, so a match is only announced once its results -- and its frame data,
     # from whichever source covers the hall -- are actually in the database.
     @{ name = 'notify_new';   args = @("collector\notify_new.py") }
