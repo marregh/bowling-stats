@@ -132,14 +132,25 @@ def main():
     what = a.hall if a.source == "falkenberg" else f"{a.uuid[:8]} banor {a.lanes}"
     print(f"{a.source}: {what}, var {a.interval}s, till {stop:%H:%M}")
 
-    total = sweeps = 0
+    total = sweeps = lost = 0
     try:
         while True:
-            if a.source == "falkenberg":
-                new, err = sweep_falkenberg(con, a.hall)
-            else:
-                new, err = sweep_lanetalk(con, a.uuid, lanes)
-            con.commit()
+            # Nothing that happens to one sweep may end the recording. A board
+            # is only available while it is on screen, so a locked database, a
+            # dropped connection or a malformed response costs that sweep and
+            # nothing more -- the loop has to still be here 30 seconds later.
+            try:
+                if a.source == "falkenberg":
+                    new, err = sweep_falkenberg(con, a.hall)
+                else:
+                    new, err = sweep_lanetalk(con, a.uuid, lanes)
+                con.commit()
+            except Exception as e:                           # noqa: BLE001
+                new, err, lost = 0, f"{type(e).__name__}: {e}", lost + 1
+                try:
+                    con.rollback()
+                except Exception:                            # noqa: BLE001
+                    con = connect()
             total += new
             sweeps += 1
             note = f"  {err}" if err else ""
@@ -150,6 +161,8 @@ def main():
             time.sleep(a.interval)
     except KeyboardInterrupt:
         print("\n  avbruten")
+    if lost:
+        print(f"  {lost} svep gick forlorade pa fel")
 
     print(f"{sweeps} svep, {total} nya poster sparade")
     return 0

@@ -119,11 +119,15 @@ class Bits:
                 body = self._open(url)
                 if is_antibot(body):
                     # Cookie expired mid-run, or this call arrived before the
-                    # gate was satisfied. Re-earn it and ask once more.
+                    # gate was satisfied. Re-earn it and ask once more -- but
+                    # fall through to the backoff below rather than `continue`,
+                    # which would skip the sleep and turn a gate that is up for
+                    # good into three immediate rounds of warm-up, challenge
+                    # and retry.
                     self.cleared = False
                     last = RuntimeError("botkontroll")
-                    continue
-                return json.loads(body.decode("utf-8")) if body else None
+                else:
+                    return json.loads(body.decode("utf-8")) if body else None
             except urllib.error.HTTPError as e:
                 # 5xx and 429 are worth another go; a 404 is a wrong endpoint
                 # name and will not improve by asking again.

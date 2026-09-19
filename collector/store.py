@@ -167,9 +167,29 @@ def migrate(con):
 
 
 def connect():
+    """Open the database so that concurrent writers wait instead of dying.
+
+    On 2026-09-19 the Falkenberg capture was killed mid-match by
+    "database is locked": the hourly collector took the write lock at 12:00:39,
+    and sqlite3's default five-second patience ran out on a capture that had
+    been recording cleanly for 270 sweeps. The images and feeds these captures
+    hold cannot be fetched again afterwards, so losing one to a lock held by a
+    job that could simply have waited is the worst trade in the project.
+
+    WAL lets readers -- the website, most of all -- carry on while a writer
+    works, and a minute of busy_timeout is far longer than any write here takes.
+    """
     DB.parent.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(DB)
+    con = sqlite3.connect(DB, timeout=60)
     con.row_factory = sqlite3.Row
+    try:
+        con.execute("PRAGMA journal_mode = WAL")
+        con.execute("PRAGMA synchronous = NORMAL")
+    except sqlite3.DatabaseError:
+        # An exclusive lock elsewhere can refuse the journal switch. It is a
+        # persistent property of the file, so the next caller sets it instead.
+        pass
+    con.execute("PRAGMA busy_timeout = 60000")
     con.executescript(SCHEMA)
     migrate(con)
     return con
