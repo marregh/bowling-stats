@@ -18,7 +18,10 @@
 {% for p in s['players'] %}
   <tr>
     <td class="mut">{{ loop.index }}</td>
-    <td><a href="{{ B }}/player/{{ p['lic'] }}{{ qargs() }}">{{ p['player'] }}</a></td>
+    {# No licence means no player page to go to -- an opponent, or someone new
+       to the club on a provisional sheet. Show the name, not a dead link. #}
+    <td>{% if p['lic'] %}<a href="{{ B }}/player/{{ p['lic'] }}{{ qargs() }}">{{ p['player'] }}</a>
+        {%- else %}{{ p['player'] }}{% endif %}</td>
     {% for g in p['games'] %}
       <td class="num {% if g and g >= target %}w{% endif %}">{{ g or '–' }}</td>
     {% endfor %}
@@ -74,6 +77,13 @@
   {%- if m['oil_pattern'] %} &middot; {{ m['oil_pattern'] }}{% endif %}
 </div>
 
+{% if running %}
+<div class="panel"><div class="note"><b>Matchen verkar pågå.</b>
+  BITS har {{ played_games }} av {{ expected_games }} serier registrerade, så
+  käglor och poäng nedan är en delsumma och kommer att ändras. Sidan
+  uppdateras av sig själv när protokollet är komplett.</div></div>
+{% endif %}
+
 {% if prov %}
 <div class="panel"><div class="note"><b>Preliminärt resultat.</b>
   BITS har inte publicerat matchen än, så siffrorna nedan är räknade ur
@@ -90,8 +100,12 @@
   <div class="card">
     <div class="k">{{ s['name'] | team }}</div>
     <div class="v">{{ s['points'] | round(0) | int if s['points'] is not none else '–' }}</div>
+    {# A strike rate belongs next to the pinfall only when it describes the
+       same games. With partial frame data it describes a sample, so the
+       coverage is shown instead of a number that invites comparison. #}
     <div class="s">{{ s['score'] }} käglor
-      {%- if s['covered'] %} &middot; {{ pct(s['st']['strikes'], s['st'].get('racks') or s['st']['frames']) | round(0) | int }}% strike{% endif %}</div>
+      {%- if s['full'] %} &middot; {{ pct(s['st']['strikes'], s['st'].get('racks') or s['st']['frames']) | round(0) | int }}% strike
+      {%- elif s['shot_games'] %} &middot; slagdata för {{ s['shot_games'] }} av {{ s['played_games'] }} serier{% endif %}</div>
   </div>
   {% endfor %}
 </div>
@@ -102,6 +116,15 @@
   {% if boards %}<br>Däremot finns <b>{{ boards }}</b> sparade bilder av
   hallens egna tavlor från den dagen. Ramarna går inte att läsa ur dem ännu,
   men bilderna ligger kvar.{% endif %}</div></div>
+{% elif not partial_ok %}
+{# Frame data exists but covers only part of the match. Saying which part
+   matters: a handful of players with statistics and the rest blank reads as a
+   broken page, when it is in fact an honest gap. #}
+<div class="panel"><div class="note"><b>Ofullständig slagdata.</b>
+  Slagstatistiken nedan bygger på
+  <b>{{ shot_games }}</b> av matchens <b>{{ played_games }}</b> serier, så
+  den beskriver inte hela matchen och lagens siffror går inte att jämföra
+  rakt av. Käglor och poäng är däremot kompletta.</div></div>
 {% endif %}
 
 {% for s in sides %}

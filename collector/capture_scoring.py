@@ -152,14 +152,33 @@ def main():
           f"showdate {showdate}, var {a.interval}s"
           + (f", till {stop:%H:%M}" if stop else ""))
 
-    total = sweeps = 0
+    total = sweeps = lost = 0
     try:
         while True:
-            new, seen = cycle(con, a.alley, showdate, lanes)
+            # Nothing that happens to one sweep may end the recording. A board
+            # is only on screen while it is being bowled, so a locked database,
+            # a dropped connection or a bad response costs that sweep and
+            # nothing else -- the loop has to still be here 30 seconds later.
+            #
+            # This is not hypothetical. On 2026-09-19 the Baltiska capture died
+            # silently at 14:44, 95 minutes before the match ended, and the B
+            # team's last two series are simply gone. capture_live.py was given
+            # this guard the same morning; this file, the older and busier of
+            # the two, was not.
+            try:
+                new, seen = cycle(con, a.alley, showdate, lanes)
+                note = ""
+            except Exception as e:                           # noqa: BLE001
+                new, seen, lost = 0, 0, lost + 1
+                note = f"  FEL: {type(e).__name__}: {e}"
+                try:
+                    con.rollback()
+                except Exception:                            # noqa: BLE001
+                    con = connect()
             total += new
             sweeps += 1
             print(f"  {datetime.now():%H:%M:%S}  {seen} banor på skärmen, "
-                  f"{new} nya bilder (totalt {total})", flush=True)
+                  f"{new} nya bilder (totalt {total}){note}", flush=True)
             if a.once:
                 break
             if stop and datetime.now() >= stop:
@@ -168,6 +187,8 @@ def main():
             time.sleep(a.interval)
     except KeyboardInterrupt:
         print("\n  avbruten")
+    if lost:
+        print(f"  {lost} svep gick förlorade på fel")
 
     held = con.execute("SELECT COUNT(*) FROM capture WHERE slug = ?",
                        (f"scoring:{a.alley}",)).fetchone()[0]

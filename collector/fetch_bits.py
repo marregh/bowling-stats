@@ -17,6 +17,19 @@ from bits import Bits, TEAMS, current_season
 from store import connect
 
 
+def expected_games(m):
+    """Player-games a complete protocol holds, or None if the scheme is odd.
+
+    players per side x rounds on this many lanes x 2 sides. The rounds figure
+    is per lane count -- numberOfRounds8Lanes and so on -- so it has to be
+    looked up by the match's own matchNbrOfLanes.
+    """
+    n = m.get("matchNbrOfPlayers") or 0
+    lanes = m.get("matchNbrOfLanes") or 0
+    rounds = m.get(f"numberOfRounds{lanes}Lanes") or 0
+    return (n * rounds * 2) or None
+
+
 def sync_season(con, api, season, verbose=True):
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     matches = api.matches(season) or []
@@ -30,12 +43,12 @@ def sync_season(con, api, season, verbose=True):
               (match_id, season, division_id, division, league, round_id,
                played_at, home_id, home, away_id, away, home_score, away_score,
                home_pts, away_pts, hall_id, hall, city, oil_pattern, scheme_id,
-               has_been_played, first_seen_played)
+               has_been_played, first_seen_played, expected_games)
             VALUES
               (:mid,:season,:div_id,:div,:league,:round,:played_at,
                :home_id,:home,:away_id,:away,:home_score,:away_score,
                :home_pts,:away_pts,:hall_id,:hall,:city,:oil,:scheme,:played,
-               :first_seen)
+               :first_seen,:expected)
             -- This table is a mirror, so everything BITS can change is taken
             -- from BITS every run. It used to refresh only the scores, which
             -- meant a fixture kept whatever it said the first time we ever saw
@@ -53,6 +66,7 @@ def sync_season(con, api, season, verbose=True):
               hall_id=excluded.hall_id, hall=excluded.hall, city=excluded.city,
               oil_pattern=excluded.oil_pattern, scheme_id=excluded.scheme_id,
               has_been_played=excluded.has_been_played,
+              expected_games=excluded.expected_games,
               -- the one column that is ours, not BITS's: stamped once, the
               -- first time BITS admitted the match was played
               first_seen_played=COALESCE(bits_match.first_seen_played,
@@ -68,6 +82,7 @@ def sync_season(con, api, season, verbose=True):
             hall_id=m["matchHallId"], hall=m["matchHallName"], city=m["matchHallCity"],
             oil=m["matchOilPatternName"], scheme=m["matchSchemeId"],
             played=1 if m["matchHasBeenPlayed"] else 0,
+            expected=expected_games(m),
             first_seen=now if m["matchHasBeenPlayed"] else None))
     con.commit()
 

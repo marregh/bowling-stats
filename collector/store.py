@@ -187,6 +187,17 @@ def migrate(con):
     CREATE TABLE IF NOT EXISTS silently leaves an older table alone, so a new
     column has to be added by hand. Cheap enough to check on every connect.
     """
+    have = {r[1] for r in con.execute("PRAGMA table_info(bits_match)")}
+    if "expected_games" not in have:
+        # How many player-games a complete protocol holds, from the match
+        # scheme BITS publishes: players per side x rounds x 2. It is the only
+        # way to tell a finished match from one BITS has flagged played while
+        # it is still being bowled -- matchFinished does not mean that (F2 sat
+        # at matchFinished=False with a complete, verified protocol), and the
+        # player rows always sum to the match score, partial or not.
+        con.execute("ALTER TABLE bits_match ADD COLUMN expected_games INTEGER")
+        con.commit()
+
     have = {r[1] for r in con.execute("PRAGMA table_info(provisional_match)")}
     if have and "home_pts" not in have:
         # Match points worked out from the scratch scores. Added after the

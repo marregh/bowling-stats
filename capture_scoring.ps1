@@ -51,6 +51,16 @@ function Write-Log($text) {
 Write-Log ("start: hall {0}, banor {1}{2}" -f $Alley, $Lanes,
            $(if ($Until) { ", till $Until" } else { "" }))
 
+# $ErrorActionPreference is deliberately relaxed for this one call. In
+# PowerShell 5.1 a native command's stderr, redirected with 2>&1, arrives as
+# NativeCommandError records -- and under 'Stop' the *first* such line kills
+# the script. On 2026-09-19 that ended the Baltiska capture at 14:44 without
+# writing either the error or the "slut" line, and the match's last two series
+# were lost. The point of a capture is to keep recording; a line on stderr must
+# be logged, not fatal.
+$ErrorActionPreference = 'Continue'
 & $python $args 2>&1 | ForEach-Object { Write-Log "   $_" }
+$code = $LASTEXITCODE
+$ErrorActionPreference = 'Stop'
 
-Write-Log "slut (exit $LASTEXITCODE)"
+Write-Log "slut (exit $code)"

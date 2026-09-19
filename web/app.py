@@ -728,21 +728,38 @@ def match_data(match_id):
             if r["side"] != side_code:
                 continue
             gs = [g for g in (r["g1"], r["g2"], r["g3"], r["g4"]) if g]
+            got = shots.get(r["player"], {})
             players.append({
                 "player": r["player"], "lic": r["lic"],
                 "games": [r["g1"], r["g2"], r["g3"], r["g4"]],
                 "series": r["series"], "place": r["place"],
                 "lane_point": r["lane_point"],
                 "avg": (sum(gs) / len(gs)) if gs else None,
-                "st": shots.get(r["player"], {}).get("st"),
+                "st": got.get("st"),
+                # How much of what this player bowled we actually have frames
+                # for. A player with one game read out of four is not the same
+                # as one with all four, and a per-game strike count says
+                # nothing without it.
+                "shot_games": got.get("games", 0), "played": len(gs),
             })
         agg = {}
         for p in players:
             if p["st"]:
                 agg = frames.add(agg, p["st"])
+        # Coverage counted in games, not players. Counting players made five
+        # decoded cards out of seventy-two look like "2 players covered", and
+        # the side's strike rate was then computed off those five games and
+        # shown next to the full pinfall as though it described the match.
+        shot_games = sum(p["shot_games"] for p in players)
+        played_games = sum(p["played"] for p in players)
         return {"name": name, "players": players, "score": score, "points": pts,
                 "st": agg or None,
-                "covered": sum(1 for p in players if p["st"])}
+                "covered": sum(1 for p in players if p["st"]),
+                "shot_games": shot_games, "played_games": played_games,
+                # Only call the aggregate the side's own when essentially all
+                # of it is there. Below that it is a sample, and saying so is
+                # the difference between thin data and wrong data.
+                "full": bool(played_games) and shot_games >= played_games}
 
     # On a provisional sheet both the pinfall and the match points are worked
     # out from the scratch scores. The points rule -- a point per lane pair
@@ -766,9 +783,18 @@ def match_data(match_id):
             (f"scoring:{alley}", (m["played_at"] or "")[:10])).fetchone()[0]
 
     ours = m["home_id"] if m["home_id"] in TEAM_TARGET else m["away_id"]
+    shot_games = sum(s["shot_games"] for s in sides)
+    played_games = sum(s["played_games"] for s in sides)
+    # BITS marks a match played the moment a protocol is opened, so a score can
+    # be a quarter of a match. Both of 2026-09-19's afternoon fixtures were on
+    # the site as finished results while they were still being bowled.
+    running = bool(m["expected_games"]) and played_games < m["expected_games"]
     return {"m": m, "sides": sides, "season": m["season"], "boards": boards,
             "target": team_target(ours), "prov": prov,
-            "has_frames": any(s["covered"] for s in sides)}
+            "has_frames": any(s["covered"] for s in sides),
+            "shot_games": shot_games, "played_games": played_games,
+            "partial_ok": shot_games >= played_games,
+            "running": running, "expected_games": m["expected_games"]}
 
 
 @app.route("/match/<int:match_id>")

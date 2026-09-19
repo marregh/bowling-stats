@@ -33,6 +33,10 @@ ROOT = Path(__file__).resolve().parent.parent
 CLUB_PREFIX = "Lunds BK Mamba"
 BITS_MATCH = "https://bits.swebowl.se/match-detail?matchid={id}"
 SOCIAL = "https://social.bowlit.nu/{alley}/{id}"
+# How long a match may sit incomplete before it is announced anyway. Long
+# enough that a slow protocol is never announced early; short enough that a
+# walkover still reaches Discord the next morning.
+GRACE_DAYS = 0.5
 KIND = "result"
 
 # Discord allows ~5 posts per few seconds per webhook; a six-match Saturday is
@@ -96,8 +100,27 @@ def pending(con, season=None, limit=None):
           AND NOT EXISTS (SELECT 1 FROM hidden h WHERE h.kind = 'team'
                           AND h.ref IN (CAST(m.home_id AS TEXT),
                                         CAST(m.away_id AS TEXT)))
+          -- Complete protocols only. BITS sets has_been_played while a match
+          -- is still being bowled: on 2026-09-19 both the B team's match and
+          -- the A team's at Lerum were announced from one serie of four, with
+          -- a score and a set of points that were simply wrong by the end. A
+          -- Discord message cannot be recalled, so it waits for every game the
+          -- scheme calls for.
+          --
+          -- The consistency check fetch_bits uses cannot catch this: the
+          -- player rows sum to the match score at every stage, partial or
+          -- not. Only the expected count can.
+          AND (m.expected_games IS NULL
+               OR (SELECT SUM((r.g1>0)+(r.g2>0)+(r.g3>0)+(r.g4>0))
+                   FROM bits_result r WHERE r.match_id = m.match_id)
+                   >= m.expected_games
+               -- Safety valve: a walkover never reaches the expected count --
+               -- the U team's opponents fielded nobody -- and silence would be
+               -- the one outcome worse than being early. After this long,
+               -- whatever BITS holds is what the match was.
+               OR julianday('now') - julianday(m.played_at) > ?)
     """
-    args = [KIND]
+    args = [KIND, GRACE_DAYS]
     if season:
         q += " AND m.season = ?"
         args.append(season)

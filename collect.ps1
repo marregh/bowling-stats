@@ -64,8 +64,17 @@ foreach ($step in @(
 )) {
     if ($Refetch -and $step.name -eq 'fetch_social') { $step.args += '--refetch' }
     Write-Log "$($step.name) ..."
+    # 'Continue' for the duration of the call. Under 'Stop', the first line a
+    # step writes to stderr arrives as a NativeCommandError and terminates the
+    # whole script -- so the "keep going" below never ran, and neither did the
+    # logging of the error itself. That is the real reason four consecutive
+    # daily runs in September logged "fetch_bits ..." and then nothing at all:
+    # not just that output is written after a step returns, but that the script
+    # was being killed before it could return.
+    $ErrorActionPreference = 'Continue'
     $out = & $python $step.args 2>&1
     $code = $LASTEXITCODE
+    $ErrorActionPreference = 'Stop'
     foreach ($line in $out) { Write-Log "   $line" }
     if ($code -ne 0) {
         # Keep going: a BITS failure should not stop the frame-data pass from
