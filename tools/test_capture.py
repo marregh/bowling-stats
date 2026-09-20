@@ -64,12 +64,29 @@ def run(con, alley, day, t0, t1, lanes, match_ids):
         return 1
     print(f"   {h['n']} bilder, {h['first']}-{h['last']} ({h['minutes']:.0f} min)")
     print(f"   banor: " + ", ".join(f"{k}:{v}" for k, v in sorted(h["lanes"].items())))
+    # Not "interruptions". Images are only stored when a board changes, so a
+    # quiet stretch looks identical to a dead capture from in here -- and the
+    # first run of this reported two "avbrott" on a capture that had in fact
+    # swept cleanly throughout, which is exactly the false alarm that wastes
+    # an afternoon. Whether the capture itself stopped is in logs/scoring.log,
+    # and the honest signal from this side is whether it reached the end.
     if h["gaps"]:
-        print(f"   {len(h['gaps'])} avbrott over 3 min:")
+        print(f"   {len(h['gaps'])} perioder over 3 min utan nya bilder "
+              f"(tavlan oforandrad, eller uppehall):")
         for a, b, d in h["gaps"][:6]:
             print(f"      {a} -> {b}  ({d}s)")
+    # A few minutes short of the window is normal: the last stored image is
+    # the last board *change*, and play stops before the clock does.
+    short = None
+    if t1:
+        end = datetime.fromisoformat(f"2000-01-01T{t1}:00")
+        got = datetime.fromisoformat("2000-01-01T" + h["last"])
+        short = (end - got).total_seconds() / 60
+    if short is not None and short > 10:
+        print(f"   VARNING: sista bilden {h['last'][:5]}, {short:.0f} min fore "
+              f"fonstrets slut {t1} -- kontrollera logs/scoring.log")
     else:
-        print("   inga avbrott over 3 min")
+        print(f"   holl hela fonstret (sista andring {h['last'][:5]}, slut {t1})")
 
     Vd, Ld = digit_templates()
     Vb, Lb = decode_balls.load_templates()
