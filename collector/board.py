@@ -34,6 +34,31 @@ ALLEYS = {
     "Eds Bowlinghall": 438,
 }
 
+# Halls with a live feed of their own, recorded by capture_live.py rather than
+# photographed off scoring.se. Each entry is the arguments that source needs,
+# and how often to poll.
+#
+# Helsingborg is at 5 seconds for a reason. Its board draws "SPELSERIEN ÄR
+# SLUT" across the lower half the instant a serie ends, and the lower half is
+# the second player on the pair -- which is us, on every pair of the U team's
+# match there. At 12s that message beat the capture to their last two frames
+# in six series out of eight, and nine of the match's cards were left
+# unfinished. The images cost nothing extra: they are only fetched when the
+# hall's own content hash changes, so a shorter interval buys board states
+# rather than duplicates.
+LIVE_HALLS = {
+    "Helsingborgs Bowlinghall": {
+        "source": "qubica", "center": "8615", "lanes": "1-20", "interval": 5,
+    },
+    "Falkenbergs Bowlinghall": {
+        "source": "falkenberg", "hall": "falkenberg", "interval": 30,
+    },
+    "Lerum Pinyard Bowling": {
+        "source": "lanetalk", "uuid": "a7c574b0-222c-11e8-8972-005056a558aa",
+        "lanes": "1-10", "interval": 30,
+    },
+}
+
 # A four-game league match runs about this long. The BITS schedule implies less
 # -- it puts the next match on the same lane group 1h40m later -- but the first
 # capture stopped during game 3 of 4 going by that.

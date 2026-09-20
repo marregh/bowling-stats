@@ -43,10 +43,25 @@ foreach ($j in $jobs) {
         Write-Log "   $($j.name): skulle skapas  $($j.start) banor $($j.lanes) till $($j.until)"
         continue
     }
+    # Two kinds of capture. A scoring.se hall is photographed lane by lane;
+    # a hall with its own feed is recorded by capture_live.ps1, at whatever
+    # interval board.LIVE_HALLS says for it -- Helsingborg needs 5s, because
+    # its board hides the second player the instant a serie ends.
+    if ($j.kind -eq 'live') {
+        $la = "-Source $($j.args.source) -Lanes $($j.lanes) " +
+              "-Until $($j.until) -Interval $($j.interval)"
+        if ($j.args.center) { $la += " -Center $($j.args.center)" }
+        if ($j.args.hall)   { $la += " -Hall $($j.args.hall)" }
+        if ($j.args.uuid)   { $la += " -Uuid $($j.args.uuid)" }
+        $script = "capture_live.ps1"
+    } else {
+        $la = "-Alley $($j.alley) -Lanes $($j.lanes) -Until $($j.until) " +
+              "-Interval $Interval"
+        $script = "capture_scoring.ps1"
+    }
     $action = New-ScheduledTaskAction -Execute 'powershell.exe' `
       -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File ' +
-                 "`"$here\capture_scoring.ps1`" -Alley $($j.alley) " +
-                 "-Lanes $($j.lanes) -Until $($j.until) -Interval $Interval") `
+                 "`"$here\$script`" $la") `
       -WorkingDirectory $here
     $trigger  = New-ScheduledTaskTrigger -Once -At $j.start
     $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun `
@@ -70,7 +85,8 @@ for r in connect().execute('SELECT match_id FROM bits_match WHERE has_been_playe
     print(r[0])
 "@ | ForEach-Object { $_.Trim() }
 
-Get-ScheduledTask | Where-Object { $_.TaskName -like 'LumaScoring*' } | ForEach-Object {
+Get-ScheduledTask | Where-Object { $_.TaskName -like 'LumaScoring*' -or
+                                   $_.TaskName -like 'LumaLive*' } | ForEach-Object {
     $id = ($_.TaskName -split '_')[-1]
     $info = Get-ScheduledTaskInfo -TaskName $_.TaskName
     if ($played -contains $id -and $_.State -ne 'Running' -and $info.LastRunTime.Year -gt 1999) {

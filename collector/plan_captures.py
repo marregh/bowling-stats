@@ -49,23 +49,37 @@ def jobs(con, days, from_date=None):
     out = []
     for r in rows:
         alley = board.ALLEYS.get(r["hall"])
-        if not alley:
+        live = board.LIVE_HALLS.get(r["hall"])
+        if not alley and not live:
             continue                      # Bowlit hall, or one we cannot reach
         when = r["played_at"]
         if when.endswith("T00:00:00"):
             continue                      # BITS has no throw-off time yet
         t = datetime.fromisoformat(when)
         begin = t - timedelta(minutes=board.LEAD_MINUTES)
-        out.append({
+        job = {
             "match_id": r["match_id"],
-            "name": f"LumaScoring{alley}_{r['match_id']}",
-            "alley": alley,
             "hall": r["hall"],
             "teams": f"{r['home']} - {r['away']}",
             "start": begin.strftime("%Y-%m-%dT%H:%M:00"),
             "until": (t + timedelta(hours=board.MATCH_HOURS)).strftime("%H:%M"),
-            "lanes": None,                # filled in below from BITS
-        })
+        }
+        if live:
+            # A hall with its own feed. Its lanes come from the registry, not
+            # from BITS: these sources hand over every lane in one call, and
+            # watching all of them costs nothing because the images are only
+            # fetched when the hall's own hash changes. BITS had this fixture
+            # on lanes 13-16 while the club was told 17-20, and being wrong
+            # about that costs the whole match.
+            job.update(kind="live", alley=None,
+                       name=f"LumaLive{live['source']}_{r['match_id']}",
+                       interval=live["interval"],
+                       args={k: v for k, v in live.items() if k != "interval"})
+        else:
+            job.update(kind="scoring", alley=alley,
+                       name=f"LumaScoring{alley}_{r['match_id']}",
+                       interval=None, lanes=None)   # lanes filled in from BITS
+        out.append(job)
     return out
 
 
@@ -84,6 +98,12 @@ def add_lane_groups(out):
     rows = rows if isinstance(rows, list) else rows.get("data", rows)
     by_id = {r["matchId"]: r for r in rows}
     for job in out:
+        # A live-feed hall already knows its lanes, from board.LIVE_HALLS, and
+        # they are deliberately the whole house rather than what BITS says.
+        if job["kind"] == "live":
+            job["lanes"] = job["args"].get("lanes", "-")
+            job["from_bits"] = False
+            continue
         m = by_id.get(job["match_id"])
         g = lane_group(m.get("matchAlleyGroupName")) if m else None
         # Capture the whole hall when BITS will not say: a lane group that turns
@@ -106,7 +126,11 @@ def main():
         if not out:
             print("  inga matcher att fanga i fonstret")
         for j in out:
-            src = "BITS" if j["from_bits"] else "hela hallen (BITS saknar bangrupp)"
+            if j["kind"] == "live":
+                src = f"{j['args']['source']}, var {j['interval']}s"
+            else:
+                src = ("BITS" if j["from_bits"]
+                       else "hela hallen (BITS saknar bangrupp)")
             print(f"  {j['start'][:16]}  {j['hall']:<24} banor {j['lanes']:<6} "
                   f"till {j['until']}  {j['teams']}   [{src}]")
         return 0
