@@ -637,16 +637,18 @@ def players_data():
 
 # How much of our own side's games a match's frame data has to cover before it
 # is worth showing at all. Below this it is a scattering rather than a sample:
-# the Baltiska capture died mid-match on 2026-09-19 and left five single games
-# out of thirty-two, one apiece for five bowlers who each played four. A row
-# like that sits next to the player's full series total and reads as his
-# figures for the match, which it is not.
+# the Baltiska capture died mid-match on 2026-09-19 and left three of our
+# thirty-two games, one apiece for bowlers who each played four. A row like
+# that sits next to the player's full series total and reads as his figures
+# for the match, which it is not.
 #
-# The line is set where it is because the real cases fall either side of it:
-# that match covers 9%, while the U team's Klippan boards -- decoded from
-# photographs, every card verified against its own printed totals -- cover
-# half, and those have been on the site since September and are worth keeping.
-MIN_FRAME_COVERAGE = 0.5
+# The three real cases fall either side of the line. Baltiska covers 9% and
+# stays hidden. Helsingborg covers 44% -- seven complete series, each verified
+# against its own printed totals, lost only because that hall's board hides
+# the second player the moment a serie ends -- and the U team's Klippan boards
+# cover half. Both of those show, with the page saying how many series the
+# figures rest on.
+MIN_FRAME_COVERAGE = 0.4
 
 
 def thin_frame_matches(con):
