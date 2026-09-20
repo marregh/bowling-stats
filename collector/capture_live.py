@@ -137,8 +137,15 @@ def sweep_qubica(con, center, lanes):
                 continue
             # Already held? The hash is the image's identity, so there is
             # nothing to fetch and nothing to store.
-            if con.execute("SELECT 1 FROM capture WHERE slug = ? AND sha = ?",
-                           (slug, h)).fetchone():
+            #
+            # Keyed by lane as well, matching the unique index. Two lanes
+            # showing a byte-identical board has not been observed -- the
+            # player names differ, so the images do -- but without the lane
+            # here the second lane's board would be skipped as a duplicate of
+            # the first and that lane would simply have a gap.
+            if con.execute(
+                    "SELECT 1 FROM capture WHERE slug = ? AND lane = ? AND sha = ?",
+                    (slug, lane, h)).fetchone():
                 continue
             try:
                 blob = fetch(QUBICA_IMAGE.format(hash=h), ref)
