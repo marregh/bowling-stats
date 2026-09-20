@@ -46,7 +46,14 @@ Write-Log "--- collect start (seasons: $what) ---"
 
 $failed = 0
 foreach ($step in @(
-    @{ name = 'fetch_bits';   args = @("collector\fetch_bits.py")   + $Seasons },
+    # Once a day, re-read the results of anything played in the last ten days
+    # even when the stored pinfall already agrees. A correction that does not
+    # move the score is invisible to the usual check, because the usual check
+    # is the score: BITS recalculated the placings on the U team's walkover
+    # and our copy kept showing 3rd, 4th and 2nd where BITS says everyone
+    # placed 1st, with every game identical so nothing ever asked again.
+    @{ name = 'fetch_bits';   args = @("collector\fetch_bits.py")   + $Seasons +
+         $(if ((Get-Date).Hour -lt 10) { @('--refresh-recent', '10') } else { @() }) },
     @{ name = 'fetch_social'; args = @("collector\fetch_social.py") + ($Seasons | ForEach-Object { '--season'; $_ }) },
     # Frames decoded off scoring.se boards, for the halls Bowlit never reaches.
     # After fetch_bits, because attributing a card to a player needs the scores

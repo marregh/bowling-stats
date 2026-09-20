@@ -17,6 +17,18 @@ from bits import Bits, TEAMS, current_season
 from store import connect
 
 
+def recently_played(m, days):
+    """Was this match played within the last `days`? Dates come as ISO text."""
+    when = (m.get("matchDateTime") or m.get("matchDate") or "")[:10]
+    if not when:
+        return False
+    try:
+        d = datetime.strptime(when, "%Y-%m-%d")
+    except ValueError:
+        return False
+    return (datetime.now() - d).days <= days
+
+
 def expected_games(m):
     """Player-games a complete protocol holds, or None if the scheme is odd.
 
@@ -30,7 +42,7 @@ def expected_games(m):
     return (n * rounds * 2) or None
 
 
-def sync_season(con, api, season, verbose=True):
+def sync_season(con, api, season, verbose=True, refresh_days=0):
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     matches = api.matches(season) or []
     divisions = set()
@@ -116,17 +128,28 @@ def sync_season(con, api, season, verbose=True):
                               FROM bits_result WHERE match_id = ?""",
                            (m["matchId"],)).fetchone()
         want = (m["matchHomeTeamScore"] or 0) + (m["matchAwayTeamScore"] or 0)
-        if have["n"] and (want == 0 or have["pins"] == want):
+        # A correction that leaves the pinfall alone is invisible to the check
+        # below, because the check is the pinfall. BITS recalculated the
+        # placings on the U team's walkover after we had mirrored it, and our
+        # copy sat there showing 3rd, 4th and 2nd where BITS says everyone
+        # placed 1st -- with every score identical, so nothing ever asked
+        # again. Re-reading recently played matches outright is the only way
+        # to catch that class of change; it is a handful of requests, so it
+        # runs once a day rather than every hour.
+        fresh = refresh_days and recently_played(m, refresh_days)
+        if not fresh and have["n"] and (want == 0 or have["pins"] == want):
             continue
         # Already asked about this exact disagreement and BITS said the same
         # thing? Then asking again is a request spent to learn nothing.
-        if have["n"] and con.execute(
+        if not fresh and have["n"] and con.execute(
                 "SELECT 1 FROM bits_result_gap WHERE match_id = ? AND want = ?",
                 (m["matchId"], want)).fetchone():
             continue
         if have["n"] and verbose:
-            print(f"   {m['matchId']}: {have['pins']} kglor lagrade, BITS sager "
-                  f"{want} -- hamtar om", flush=True)
+            why = ("nyligen spelad -- las om for sakerhets skull"
+                   if fresh and have["pins"] == want
+                   else f"{have['pins']} kglor lagrade, BITS sager {want} -- hamtar om")
+            print(f"   {m['matchId']}: {why}", flush=True)
         # Fetch first, delete after. The DELETE used to come before this call,
         # which opened a write transaction and then held it across a request to
         # BITS -- fine at the 8s BITS of last week, ruinous today at 280s: that
@@ -173,6 +196,11 @@ def main():
                     help="season ids; defaults to the current one")
     ap.add_argument("--all", action="store_true",
                     help="every season already in the mirror")
+    ap.add_argument("--refresh-recent", type=int, default=0, metavar="DAYS",
+                    dest="refresh_recent",
+                    help="re-read results for matches played in the last DAYS, "
+                         "even when the stored pinfall already agrees -- "
+                         "catches corrections that do not move the score")
     a = ap.parse_args()
     con, api = connect(), Bits()
 
@@ -185,7 +213,7 @@ def main():
         seasons = [current_season()]
 
     for s in seasons:
-        sync_season(con, api, s)
+        sync_season(con, api, s, refresh_days=a.refresh_recent)
     print("teams:", ", ".join(TEAMS.values()))
 
 
