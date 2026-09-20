@@ -27,6 +27,7 @@ Both dedupe on content, so a board that has not changed is not stored twice.
 """
 import argparse
 import hashlib
+import json
 import sys
 import time
 import urllib.error
@@ -37,6 +38,16 @@ from store import connect
 
 UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 LANETALK_KEY = "ifqUIAvwExByDEA0NLbqEXN2w8vSef2dQovE"
+# QubicaAMF's public board, as used by Olympia Bowling in Helsingborg. One
+# JSON call returns every lane pair: the teams, each player's running total
+# and their strike/spare/split counters, plus a content hash per lane. The
+# hash is the frame-by-frame scoreboard image, fetched separately -- so both
+# are recorded, the JSON because it is already structured and the images
+# because only they carry the individual balls.
+QUBICA_STATUS = ("https://onlinescore.qubicaamf.com/GetLanesStatusView.ashx"
+                 "?idcenter={center}")
+QUBICA_IMAGE = "https://onlinescore.qubicaamf.com/GetImage.ashx?hash={hash}"
+QUBICA_REF = "https://onlinescore.qubicaamf.com/Content.aspx?idcenter={center}"
 LANETALK_IMG = "https://scoring.lanetalk.com/upload/{uuid}/VTVFile{lane}.jpg"
 LANETALK_API = "https://api.lanetalk.com/v1/bowlingcenters/{uuid}/{what}"
 FALKENBERG = "https://{hall}.bowlingscoring.se/api/public/hall/{hall}/live"
@@ -94,6 +105,54 @@ def sweep_lanetalk(con, uuid, lanes):
     return new, None
 
 
+def sweep_qubica(con, center, lanes):
+    """Record the lane-status JSON, and the board image behind every hash.
+
+    Images are keyed by hash, so a board that has not changed is fetched once
+    and stored once however long it stays on screen.
+    """
+    slug = f"qubica:{center}"
+    ref = {"Referer": QUBICA_REF.format(center=center)}
+    try:
+        body = fetch(QUBICA_STATUS.format(center=center),
+                     {**ref, "Accept": "application/json"})
+    except Exception as e:                                   # noqa: BLE001
+        return 0, f"{type(e).__name__}: {e}"
+    new = store_raw(con, slug, "lanes", body)
+
+    try:
+        data = json.loads(body.decode("utf-8", "replace"))
+    except ValueError as e:
+        return new, f"JSON gick inte att lasa: {e}"
+
+    for pair in data.get("PairItems") or []:
+        for side in ("Left", "Right"):
+            lane = pair.get(f"{side}Nr")
+            if lanes and lane not in lanes:
+                continue
+            if pair.get(f"{side}ImageStatus") != "Valid":
+                continue
+            h = pair.get(f"{side}ImageHash")
+            if not h:
+                continue
+            # Already held? The hash is the image's identity, so there is
+            # nothing to fetch and nothing to store.
+            if con.execute("SELECT 1 FROM capture WHERE slug = ? AND sha = ?",
+                           (slug, h)).fetchone():
+                continue
+            try:
+                blob = fetch(QUBICA_IMAGE.format(hash=h), ref)
+            except Exception:                                # noqa: BLE001
+                continue
+            cur = con.execute(
+                "INSERT OR IGNORE INTO capture (ts, slug, lane, book_id, game,"
+                " sha, png) VALUES (?,?,?,?,?,?,?)",
+                (datetime.now().isoformat(timespec="seconds"), slug, lane,
+                 None, None, h, blob))
+            new += cur.rowcount
+    return new, None
+
+
 def parse_lanes(text):
     if not text:
         return []
@@ -105,7 +164,9 @@ def parse_lanes(text):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--source", required=True, choices=("falkenberg", "lanetalk"))
+    ap.add_argument("--source", required=True,
+                    choices=("falkenberg", "lanetalk", "qubica"))
+    ap.add_argument("--center", help="qubica idcenter")
     ap.add_argument("--hall", default="falkenberg", help="bowlingscoring.se hall slug")
     ap.add_argument("--uuid", help="lanetalk bowling centre uuid")
     ap.add_argument("--lanes", default="1-10")
@@ -118,6 +179,9 @@ def main():
     if a.source == "lanetalk" and not a.uuid:
         print("lanetalk behover --uuid")
         return 2
+    if a.source == "qubica" and not a.center:
+        print("qubica behover --center")
+        return 2
 
     con = connect()
     lanes = parse_lanes(a.lanes)
@@ -129,7 +193,12 @@ def main():
     else:
         stop = datetime.now() + timedelta(hours=a.hours)
 
-    what = a.hall if a.source == "falkenberg" else f"{a.uuid[:8]} banor {a.lanes}"
+    if a.source == "falkenberg":
+        what = a.hall
+    elif a.source == "qubica":
+        what = f"center {a.center} banor {a.lanes}"
+    else:
+        what = f"{a.uuid[:8]} banor {a.lanes}"
     print(f"{a.source}: {what}, var {a.interval}s, till {stop:%H:%M}")
 
     total = sweeps = lost = 0
@@ -142,6 +211,8 @@ def main():
             try:
                 if a.source == "falkenberg":
                     new, err = sweep_falkenberg(con, a.hall)
+                elif a.source == "qubica":
+                    new, err = sweep_qubica(con, a.center, lanes)
                 else:
                     new, err = sweep_lanetalk(con, a.uuid, lanes)
                 con.commit()
